@@ -4,12 +4,8 @@ Created on Sun Jan 05 2026
 Optimized: Tue Jan 06 2026
 Optimization: Unified amount cleaning logic to 'sniff_and_load_data'
 @author: TZY_YX
-<<<<<<< HEAD
-=======
 这是一个测试2026011203
 这是一个测试2026011204
-这是一个测试2026011205
->>>>>>> c4bbb5b2e7863f894c5a6c81eec06f4f361c6c26
 """
 
 import datetime
