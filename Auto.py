@@ -2,10 +2,12 @@ import os
 import subprocess
 import datetime
 import time
+from pathlib import Path
 
 # ================= 配置区域 =================
 # 这里填你的项目绝对路径 (注意前面的 r 不能删，那是为了处理 Windows 路径斜杠的)
-REPO_PATH = r"E:\天之逸2025\Moze4.0"
+
+REPO_PATH = Path(__file__).resolve().parent
 # ===========================================
 
 def run_command(cmd, description):
