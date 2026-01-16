@@ -16,15 +16,15 @@ Update:
 @author: TZY_YX
 """
 
-import datetime
 import re
+import datetime
 import traceback
 import tkinter as tk
 import time
 from tkinter import filedialog, simpledialog
 from pathlib import Path
-import numpy as np
 import pandas as pd
+import numpy as np
 
 # 抑制 SettingWithCopyWarning
 pd.options.mode.chained_assignment = None
@@ -118,18 +118,18 @@ DATA_SOURCE = {
     'INGREDIENTS': [
         # --- 通用 ---
         "食材",
-        
+
         # --- 面点主食 ---
         "馒头", "生水饺", "鲜面条", "干面条", "挂面",
-        
+
         # --- 腊味腌货 ---
         "火腿", "腊肠", "榨菜", "甜酒",
-        
+
         # --- 调味品/酱料 ---
-        "老干妈", "杂酱", "酱料", "炸酱", "酱豆", "辣椒酱", 
-        "白砂糖", "食用盐", "生抽", "老抽", "耗油", "料酒", 
+        "老干妈", "杂酱", "酱料", "炸酱", "酱豆", "辣椒酱",
+        "白砂糖", "食用盐", "生抽", "老抽", "耗油", "料酒",
         "胡椒粉", "辣椒粉", "蒸肉粉", "火锅底料",
-        
+
         # --- 干货杂粮 ---
         "红豆", "绿豆", "黄豆"
     ],
@@ -337,12 +337,16 @@ def sniff_and_load_data(file_path: Path):
         elif file_path.suffix.lower() == '.xlsx':
             df = pd.read_excel(file_path, header=16, engine='openpyxl')
             ftype = "WeChat"
-        if df is None: return None
+        if df is None:
+            return None
 
-        df.columns = df.columns.astype(str).str.strip().str.replace('[（(]', '(', regex=True).str.replace('[）)]', ')', regex=True)
+        df.columns = df.columns.astype(str).str.strip().str.replace(
+            '[（(]', '(', regex=True).str.replace('[）)]', ')', regex=True)
         df.rename(columns=COLUMN_MAPPING, inplace=True)
-        if '金额(元)' not in df.columns: return None
-        df['金额(元)'] = pd.to_numeric(df['金额(元)'].astype(str).str.replace(r'[¥,]', '', regex=True).str.strip(), errors='coerce').fillna(0)
+        if '金额(元)' not in df.columns:
+            return None
+        df['金额(元)'] = pd.to_numeric(df['金额(元)'].astype(str).str.replace(
+            r'[¥,]', '', regex=True).str.strip(), errors='coerce').fillna(0)
         df['金额'] = df['金额(元)']
         df['_source_tag'] = '#WechatPay' if ftype == "WeChat" else '#AliPay'
         print(f"  成功 (类型: {ftype})")
@@ -366,47 +370,47 @@ def ensure_columns(df, main_col, sub_col):
 def process_transfers(df, main_col, sub_col):
     if df.empty:
         return pd.DataFrame()
-    
+
     # 1. 获取配置变量
     t1 = CONFIG['TRANSFER_TARGET_1']
     t2 = CONFIG['TRANSFER_TARGET_2']
-    t_sb = CONFIG['TRANSFER_TARGET_SNOWBALL'] # <--- [引用] 引用配置
+    t_sb = CONFIG['TRANSFER_TARGET_SNOWBALL']  # <--- [引用] 引用配置
 
     # 2. 生成掩码
     mask_t1 = df["交易对方"] == t1
     mask_t2 = df["交易对方"] == t2
-    mask_sb = df["交易对方"] == t_sb # <--- [筛选]
+    mask_sb = df["交易对方"] == t_sb  # <--- [筛选]
 
     mask_in = df["收/支"] == "收入"
     mask_out = df["收/支"] == "支出"
-    
+
     res_list = []
 
     def create_records(mask, out_acc, in_acc, sub_val='转账'):
         if not mask.any():
             return
         base = df[mask].copy()
-        
+
         # 转出
         o_rec = base.copy()
         o_rec['金额'] = base['金额'] * -1
         o_rec['记录类型'] = '转出'
         o_rec['账户'] = out_acc
         o_rec[sub_col] = sub_val
-        
+
         # 转入
         i_rec = base.copy()
         i_rec['记录类型'] = '转入'
         i_rec['账户'] = in_acc
         i_rec[sub_col] = sub_val
-        
+
         res_list.extend([o_rec, i_rec])
 
     # 3. 执行生成逻辑
     create_records(mask_t1 & mask_in, '零钱2', '零钱3')
     create_records(mask_t1 & mask_out, '零钱3', '零钱2')
     create_records(mask_t2, '零钱3', '工商银行', '提现')
-    create_records(mask_sb & mask_out, '平安银行4946', '武汉通', '充值') 
+    create_records(mask_sb & mask_out, '平安银行4946', '武汉通', '充值')
 
     if not res_list:
         return pd.DataFrame()
@@ -429,7 +433,7 @@ def process_heuristics(df, main_col, sub_col):
     3. 报销词 - 填名称，填对象
     """
     df.reset_index(drop=True, inplace=True)
-    
+
     df = ensure_columns(df, main_col, sub_col)
     cols_to_str = [sub_col, '项目', '描述', '商家', '商品']
     df[cols_to_str] = df[cols_to_str].astype(str).apply(
@@ -446,34 +450,41 @@ def process_heuristics(df, main_col, sub_col):
     # Phase 1: 基础推导 (DATA_SOURCE)
     # =========================================================================
     uncat = df[sub_col] == ""
-    
+
     # 1.1 充电
     mask = df['商品'].str.contains(CONFIG['KEYWORD_CHARGING'], na=False) & uncat
-    if mask.any(): df.loc[mask, ['名称', sub_col]] = ['充电', '加油充电']
-    
+    if mask.any():
+        df.loc[mask, ['名称', sub_col]] = ['充电', '加油充电']
+
     # 1.2 软件
     mask = search_series.str.contains(PATTERNS['SOFTWARE'], regex=True) & uncat
-    if mask.any(): df.loc[mask, sub_col] = 'Software'
-    
+    if mask.any():
+        df.loc[mask, sub_col] = 'Software'
+
     # 1.3 基础分类 (水果/饮料等)
     for k, n, s in [('FRUIT', '水果', '饮料水果'), ('DRINK', '饮料', '饮料水果'), ('WATER', '', '纯净水')]:
         mask = search_series.str.contains(PATTERNS[k], regex=True) & uncat & (
             (df[sub_col] == "") | (df[sub_col] == "食材"))
-        if mask.any(): df.loc[mask, ['名称', sub_col]] = [n, s]
+        if mask.any():
+            df.loc[mask, ['名称', sub_col]] = [n, s]
 
     # 1.4 食材/日用/零食 (保留空名称)
     mask_meal = search_series.str.contains(PATTERNS['MEAL'], regex=True)
     main_filter = uncat | (df[main_col].isin(['购物', '居家', '饮食']))
     for key, name, sub_c in INGREDIENT_PRIORITY:
         pat = PATTERNS[key]
-        mask = search_series.str.contains(pat, regex=True) & (~mask_meal) & main_filter
+        mask = search_series.str.contains(
+            pat, regex=True) & (~mask_meal) & main_filter
         if key in ['SEAFOOD', 'PORK', 'POULTRY', 'BEEF_MUTTON', 'VEGETABLE']:
-            mask &= (~search_series.str.contains(PATTERNS['COOKED'], regex=True))
-        if mask.any(): df.loc[mask, [sub_col, '名称']] = [sub_c, name]
+            mask &= (~search_series.str.contains(
+                PATTERNS['COOKED'], regex=True))
+        if mask.any():
+            df.loc[mask, [sub_col, '名称']] = [sub_c, name]
 
     # 1.5 停车/借贷
     mask = search_series.str.contains(PATTERNS['Parking_fee'], regex=True)
-    if mask.any(): df.loc[mask, [sub_col, '名称', '对象']] = ['报账', '停车费', '天之逸']
+    if mask.any():
+        df.loc[mask, [sub_col, '名称', '对象']] = ['报账', '停车费', '天之逸']
 
     keys = ['报账', '借出', '代付', '押金', '借入']
     debt_pat = rf"({'|'.join(keys)})\s*(.*)"
@@ -482,32 +493,35 @@ def process_heuristics(df, main_col, sub_col):
     if mask_found.any():
         df.loc[mask_found, sub_col] = extracted[0]
         mask_obj = mask_found & (extracted[1].str.strip() != "")
-        if mask_obj.any(): df.loc[mask_obj, '对象'] = extracted[1].str.strip()
+        if mask_obj.any():
+            df.loc[mask_obj, '对象'] = extracted[1].str.strip()
         df.loc[mask_found, ['项目', '描述']] = ""
 
     # 1.6 MEAL 自动推导的时间段分类 (名称留空)
     mask_time_meal = (df[sub_col] == "") & mask_meal
     if mask_time_meal.any():
         h = df.loc[mask_time_meal, '交易时间'].dt.hour
-        conditions = [(h >= 6) & (h < 11), (h >= 11) & (h < 16), (h >= 16) & (h < 21)]
+        conditions = [(h >= 6) & (h < 11), (h >= 11) &
+                      (h < 16), (h >= 16) & (h < 21)]
         choices = ["早餐", "午餐", "晚餐"]
-        df.loc[mask_time_meal, sub_col] = np.select(conditions, choices, default="夜宵")
+        df.loc[mask_time_meal, sub_col] = np.select(
+            conditions, choices, default="夜宵")
 
     # =========================================================================
     # Phase 2 & 3: 点语法强力覆盖 (Dot Syntax Override)
     # =========================================================================
     split_pat = r"^([^.]+)(?:\.(.*))?$"
     extracted_data = df['描述'].astype(str).str.extract(split_pat, expand=True)
-    
+
     mask_has_content = extracted_data[0].notna() & (df['描述'].str.strip() != "")
-    
+
     if mask_has_content.any():
         heads = extracted_data[0].str.strip()
         tails = extracted_data[1].fillna("").str.strip()
-        
+
         valid_subcats_set = set(VALID_SUBCATS)
         generic_keywords = valid_subcats_set.union({'正餐', '日用'})
-        
+
         ty_reim_keys = [
             "材料费", "车船费", "代付货款", "过路费",
             "交通费", "汽车费用", "市内交通", "招待费", "住宿费"
@@ -537,17 +551,21 @@ def process_heuristics(df, main_col, sub_col):
     mapped_values = df[sub_col].map(AUTO_MAP_DICT)
     mask_mapped = mapped_values.notna()
     if mask_mapped.any():
-        df.loc[mask_mapped, '记录类型'] = mapped_values[mask_mapped].apply(lambda x: x[0])
-        df.loc[mask_mapped, main_col] = mapped_values[mask_mapped].apply(lambda x: x[1])
-        df.loc[mask_mapped, '项目'] = mapped_values[mask_mapped].apply(lambda x: x[2])
-    
+        df.loc[mask_mapped, '记录类型'] = mapped_values[mask_mapped].apply(
+            lambda x: x[0])
+        df.loc[mask_mapped, main_col] = mapped_values[mask_mapped].apply(
+            lambda x: x[1])
+        df.loc[mask_mapped, '项目'] = mapped_values[mask_mapped].apply(
+            lambda x: x[2])
+
     df['描述'] = df['描述'].str.strip()
     return df
 
 
 def process_main(df, df_rules, main_col, sub_col):
     for c in ['当前状态', '收/支', '交易对方', '交易时间']:
-        if c not in df.columns: df[c] = ""
+        if c not in df.columns:
+            df[c] = ""
     df = df[
         (~df["当前状态"].isin(["已全额退款", "交易关闭"])) &
         (abs(df["金额"]) > 0.0001)
@@ -555,41 +573,52 @@ def process_main(df, df_rules, main_col, sub_col):
 
     df = df[df["收/支"] == "支出"].copy()
 
-    if df.empty: return pd.DataFrame()
+    if df.empty:
+        return pd.DataFrame()
     print(f"--- 处理主交易 ({len(df)}条) ---", flush=True)
 
     df = ensure_columns(df, main_col, sub_col)
-    df['支付方式'] = df['支付方式'].astype(str).replace(STANDARDIZE_ACCOUNTS, regex=True)
+    df['支付方式'] = df['支付方式'].astype(str).replace(
+        STANDARDIZE_ACCOUNTS, regex=True)
     df['商家(old)'] = df.get('交易对方', pd.NA).astype(str).str.strip()
-    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in ['商家(old)', 'is_regex']}
+    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in [
+        '商家(old)', 'is_regex']}
 
     df = pd.merge(df, df_rules[df_rules['is_regex'] == 0].rename(columns=rename_map).drop(
         columns='is_regex', errors='ignore'), on='商家(old)', how='left')
-    
+
     df.reset_index(drop=True, inplace=True)
 
     rule_col_check = f"{main_col}_rule"
-    uncat_mask = df[rule_col_check].isna() if rule_col_check in df.columns else pd.Series(True, index=df.index)
+    uncat_mask = df[rule_col_check].isna(
+    ) if rule_col_check in df.columns else pd.Series(True, index=df.index)
     if uncat_mask.any():
         regex_rules = df_rules[df_rules['is_regex'] == 1]
         to_match = df.loc[uncat_mask, '交易对方'].astype(str)
         for _, r in regex_rules.iterrows():
-            match_indices = to_match[to_match.str.contains(r['商家(old)'], regex=True)].index
+            match_indices = to_match[to_match.str.contains(
+                r['商家(old)'], regex=True)].index
             if not match_indices.empty:
-                for c, rc in rename_map.items(): df.loc[match_indices, rc] = r[c]
+                for c, rc in rename_map.items():
+                    df.loc[match_indices, rc] = r[c]
                 to_match = to_match.drop(match_indices)
 
     for orig, rule in rename_map.items():
         if rule in df.columns:
-            if orig != '描述': df[orig] = df[rule].combine_first(df[orig])
-            if orig != '描述': df.drop(columns=[rule], inplace=True)
+            if orig != '描述':
+                df[orig] = df[rule].combine_first(df[orig])
+            if orig != '描述':
+                df.drop(columns=[rule], inplace=True)
 
     if '商户单号' in df.columns:
-        mask_tb = (df.get('_source_tag', '') == '#AliPay') & df['商户单号'].astype(str).str.strip().str.startswith('T200P4', na=False)
-        if mask_tb.any(): df.loc[mask_tb, '商家'] = '淘宝'
+        mask_tb = (df.get('_source_tag', '') == '#AliPay') & df['商户单号'].astype(
+            str).str.strip().str.startswith('T200P4', na=False)
+        if mask_tb.any():
+            df.loc[mask_tb, '商家'] = '淘宝'
 
     df = construct_description(df)
-    if '描述_rule' in df.columns: df.drop(columns=['描述_rule'], inplace=True)
+    if '描述_rule' in df.columns:
+        df.drop(columns=['描述_rule'], inplace=True)
     df['记录类型'] = df.get('记录类型', pd.NA).replace("", pd.NA).fillna(df['收/支'])
     df['商家'] = df.get('商家', pd.NA).replace("", pd.NA).fillna(df['交易对方'])
     df[sub_col] = df[sub_col].astype(str).str.strip().replace("nan", "")
@@ -597,7 +626,8 @@ def process_main(df, df_rules, main_col, sub_col):
     # 执行核心混合逻辑
     df = process_heuristics(df, main_col, sub_col)
 
-    mask_neg = (df['记录类型'].isin(['支出', '应付款项', '应收款项'])) & (df.get('收/支') == '支出')
+    mask_neg = (df['记录类型'].isin(['支出', '应付款项', '应收款项'])) & (
+        df.get('收/支') == '支出')
     df.loc[mask_neg, '金额'] *= -1
     mask_borrow = df[sub_col] == '借入'
     df.loc[mask_borrow, '金额'] = df.loc[mask_borrow, '金额'].abs()
@@ -642,11 +672,14 @@ def get_user_input():
 def save_result(df, cols):
     if '标签' in df.columns:
         m = ~df['记录类型'].isin(['转入', '转出'])
-        df.loc[m, '标签'] = (df.loc[m, '标签'].fillna("") + " " + df.loc[m, '_source_tag']).str.strip()
+        df.loc[m, '标签'] = (df.loc[m, '标签'].fillna(
+            "") + " " + df.loc[m, '_source_tag']).str.strip()
     type_priority = {'转出': 0, '转入': 1}
     df['_Type_Rank'] = df['记录类型'].map(type_priority).fillna(0)
-    df.sort_values(['_Sort_Date', '_Type_Rank'], ascending=[False, True], inplace=True)
-    if not TARGET_DIR.exists(): TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    df.sort_values(['_Sort_Date', '_Type_Rank'],
+                   ascending=[False, True], inplace=True)
+    if not TARGET_DIR.exists():
+        TARGET_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     path = TARGET_DIR / f"MOZE导入_{timestamp}.csv"
     df.to_csv(path, index=False, columns=cols, encoding='utf-8-sig')
@@ -661,60 +694,72 @@ def main():
         if df_rules is None:
             input("按 Enter 退出")
             return
-        cols = [c for c in df_rules.columns if c not in ['商家(old)', 'is_regex']]
+        cols = [c for c in df_rules.columns if c not in [
+            '商家(old)', 'is_regex']]
         main_col = next((c for c in cols if "主类" in c), None)
         sub_col = next((c for c in cols if "子类" in c), None)
-        if not main_col: return
+        if not main_col:
+            return
 
         files, st_date = get_user_input()
-        if not files: return
+        if not files:
+            return
         dfs = []
         for f in files:
             d = sniff_and_load_data(Path(f))
-            if d is not None: dfs.append(d)
-        if not dfs: return
+            if d is not None:
+                dfs.append(d)
+        if not dfs:
+            return
 
         df_raw = pd.concat(dfs, ignore_index=True)
         df_raw['交易时间'] = df_raw['交易时间'].apply(robust_date_converter)
-        if st_date: df_raw = df_raw[df_raw['交易时间'] >= st_date]
-        
+        if st_date:
+            df_raw = df_raw[df_raw['交易时间'] >= st_date]
+
         # [核心] 更新筛选逻辑：包含雪球 target
         df_raw['交易对方'] = df_raw.get('交易对方', pd.NA).astype(str).str.strip()
         target_list = [
-            CONFIG['TRANSFER_TARGET_1'], 
-            CONFIG['TRANSFER_TARGET_2'], 
-            CONFIG['TRANSFER_TARGET_SNOWBALL'] # <--- 雪
+            CONFIG['TRANSFER_TARGET_1'],
+            CONFIG['TRANSFER_TARGET_2'],
+            CONFIG['TRANSFER_TARGET_SNOWBALL']  # <--- 雪
         ]
         mask_trans = df_raw['交易对方'].isin(target_list)
-        
+
         res_dfs = []
         if mask_trans.any():
-            res_dfs.append(process_transfers(df_raw[mask_trans].copy(), main_col, sub_col))
+            res_dfs.append(process_transfers(
+                df_raw[mask_trans].copy(), main_col, sub_col))
         if (~mask_trans).any():
-            res_dfs.append(process_main(df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
-        
+            res_dfs.append(process_main(
+                df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
+
         if not res_dfs:
             print("无结果")
             return
-            
+
         df_final = pd.concat(res_dfs, ignore_index=True)
         for c in cols:
-            if c not in df_final.columns: df_final[c] = ""
+            if c not in df_final.columns:
+                df_final[c] = ""
         path = save_result(df_final, cols)
         print(f"\n{BColors.OKGREEN}成功! 文件: {path}{BColors.ENDC}")
-        
+
         checks = [('支出', df_final['记录类型'] == '支出', [main_col, sub_col, '项目']),
                   ('债权', df_final['记录类型'].isin(['应收款项', '应付款项']), [main_col, sub_col, '对象'])]
         for name, mask, check_cols in checks:
             bad = mask & df_final[check_cols].isin(["", pd.NA]).any(axis=1)
             if bad.any():
-                print(f"{BColors.FAIL}[严重] {bad.sum()} 条【{name}】记录缺失关键信息:{BColors.ENDC}")
+                print(
+                    f"{BColors.FAIL}[严重] {bad.sum()} 条【{name}】记录缺失关键信息:{BColors.ENDC}")
                 display_cols = ['日期', '商家', '金额', '描述'] + check_cols
-                print(df_final.loc[bad, display_cols].fillna('[空]').head(5).to_string(index=True))
+                print(df_final.loc[bad, display_cols].fillna(
+                    '[空]').head(5).to_string(index=True))
         print(f"{BColors.OKGREEN}√ 处理完成{BColors.ENDC}")
 
     except Exception:
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     start_time = time.time()
