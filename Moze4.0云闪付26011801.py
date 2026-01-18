@@ -9,7 +9,8 @@ Moze 4.0 OCR 最终极简实战版
 2. 图像处理: 自带增强，死磕时间识别 (22:31)
 3. 字段清洗: 该空的空，该填的填
 """
-
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import numpy as np
 from PIL import Image, ImageEnhance
 import time
@@ -19,13 +20,13 @@ import tkinter as tk
 import datetime
 import re
 import easyocr
-import os
+
 import sys
 
 # ==============================================================================
 # 🚑 防报错补丁
 # ==============================================================================
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 
 
 # --- 核心配置 ---
