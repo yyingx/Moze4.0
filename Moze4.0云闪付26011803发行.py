@@ -8,10 +8,21 @@ Moze 4.0 审计日志版 (Audit Log)
 3. 【全功能集成】: 包含智能拼接、倒序跨年、名字去噪、闭环验证等所有核心科技。
 """
 
+from tkinter import filedialog
+from pathlib import Path
+import tkinter as tk
+import easyocr
+import re
+import datetime
+import pandas as pd
+import cv2
+import numpy as np
+import sys
 import os
 # 🚑 防报错补丁 (必须放在所有 import 之前，除了 os)
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+<<<<<<< HEAD
 # -----------------  ------------------------------------
 # 👇 在下面这些 import 后面加上  # noqa: E402
 # 这告诉格式化工具：忽略“import不在开头”的警告，不要移动它们
@@ -27,21 +38,25 @@ import easyocr  # noqa: E402
 import tkinter as tk  # noqa: E402
 from tkinter import filedialog  # noqa: E402
 
+=======
+>>>>>>> b2878591ca7f4d980e05b8a20c4fefa413e853bb
 
 # ==============================================================================
 # ⚙️ 用户配置
 # ==============================================================================
 DEFAULT_YEAR = 2026
 MY_NAME = "应翔"
-EXPORT_DIR = r"E:\天之逸2025\Moze4.0\Moze4.0_Import"
+CURRENT_DIR = Path(__file__).parent if '__file__' in locals() else Path.cwd()
+EXPORT_DIR = CURRENT_DIR / "Moze4.0_Import"
 
 ACCOUNT_MAP = {
-    '9708': '建设银行9780', '9780': '建设银行9780', '建设银行': '建设银行9780',
-    '9579': '工商银行9579', '工商银行': '工商银行9579',
-    '2973': '农业银行2973', '农业银行': '农业银行2973',
-    '5680': '湖北省农村信用社', '农村信用社': '湖北省农村信用社', '信用社': '湖北省农村信用社',
-    '4946': '平安银行4946', '平安银行': '平安银行4946',
-    '1517': '兴业银行1517', '兴业银行': '兴业银行1517'
+    '9708': '建设银行Ⅱ',
+    '9579': '工商银行',
+    '2973': '农业银行',
+    '5680': '湖北农信',
+    '4946': '平安银行4946',
+    '8045': '平安银行',
+    '1517': '兴业银行1517'
 }
 
 MOZE_COLUMNS = ['账户', '币种', '记录类型', '主类别', '子类别', '金额', '手续费',
