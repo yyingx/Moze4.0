@@ -16,15 +16,15 @@ Update:
 @author: TZY_YX
 """
 
+import numpy as np
+import pandas as pd
+from pathlib import Path
+from tkinter import filedialog, simpledialog
+import time
+import tkinter as tk
+import traceback
 import re
 import datetime
-import traceback
-import tkinter as tk
-import time
-from tkinter import filedialog, simpledialog
-from pathlib import Path
-import pandas as pd
-import numpy as np
 
 # 抑制 SettingWithCopyWarning
 pd.options.mode.chained_assignment = None
@@ -95,7 +95,7 @@ DATA_SOURCE = {
         "白菜", "菠菜", "上海青", "油麦菜", "生菜", "娃娃菜", "空心菜", "苋菜", "菜芯",
         "韭菜", "香菜", "芹菜", "荠菜", "芥蓝",
         # 根茎类
-        "土豆", "胡萝卜", "白萝卜", "青萝卜", "红薯", "紫薯", "山药", "芋头", "莲藕", "藕",
+        "土豆", "胡萝卜", "萝卜", "白萝卜", "青萝卜", "红薯", "紫薯", "山药", "芋头", "莲藕", "藕",
         "洋葱", "大蒜", "生姜", "竹笋", "芦笋", "茭白",
         # 茄果/瓜果类
         "西红柿", "茄子", "黄瓜", "西葫芦", "南瓜", "冬瓜", "苦瓜", "丝瓜", "青椒", "彩椒",
