@@ -7,6 +7,7 @@ Moze 4.0 审计日志版 (Audit Log)
 2. 【透明汇报】: 统计最终修正了多少条时间数据。
 3. 【全功能集成】: 包含智能拼接、倒序跨年、名字去噪、闭环验证等所有核心科技。
 """
+<<<<<<< HEAD
 
 # from tkinter import filedialog
 # from pathlib import Path
@@ -18,10 +19,20 @@ Moze 4.0 审计日志版 (Audit Log)
 # import cv2
 # import numpy as np
 # import sys
+=======
+>>>>>>> c9ecce03bcd72d3c0465cc743154d2a198b412e2
 import os
 # 🚑 防报错补丁 (必须放在所有 import 之前，除了 os)
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+<<<<<<< HEAD
+=======
+# -----------------  ------------------------------------
+# 👇 在下面这些 import 后面加上  # noqa: E402
+# 这告诉格式化工具：忽略“import不在开头”的警告，不要移动它们
+# --------------------------------------------------------
+
+>>>>>>> c9ecce03bcd72d3c0465cc743154d2a198b412e2
 import sys  # noqa: E402
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
@@ -31,7 +42,11 @@ import re  # noqa: E402
 import easyocr  # noqa: E402
 import tkinter as tk  # noqa: E402
 from tkinter import filedialog  # noqa: E402
+<<<<<<< HEAD
 from pathlib import Path # noqa: E402
+=======
+
+>>>>>>> c9ecce03bcd72d3c0465cc743154d2a198b412e2
 
 # ==============================================================================
 # ⚙️ 用户配置

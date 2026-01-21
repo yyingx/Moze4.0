@@ -1,23 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jan 15 21:45:02 2026
-
-@author: yingx
-"""
-
-"""
-Moze 导入脚本 v11.63 (Snowball Auto-Transfer)
+Moze 导入脚本 v11.64 (Bug Fixes)
 Created on Sun Jan 05 2026
-Optimized: Thu Jan 16 2026
-Update: 
-1. Added 'Snowball' auto-transfer logic (Expense -> Transfer Out/In 'Money Manager').
-2. Updated main loop filter to include Snowball target.
-3. Retained v11.62 naming logic (Clean names for generics).
+Optimized: Mon Jan 20 2026
+
 @author: TZY_YX
-BUG FIXES:
-描述  Name.xxx  name没有被清除
-微信描述 借入xxx,不能被识别，原因是代码前做了筛选。
-幼儿园预定时间显示早餐
+
+BUG FIXES (v11.64):
+[已修复] 描述 Name.xxx - name没有被清除 → Phase 2/3 通用分类词处理时清空名称
+[已修复] 微信描述 借入xxx - 不能被识别 → 借入/借出等债务关键词在收支筛选前先处理
+[已修复] 幼儿园预定时间显示早餐 → 排除特定商家的时间段推导
+[已修复] 生水饺被识别成午餐 → INGREDIENTS关键词优先于MEAL的部分匹配
 """
 
 import numpy as np
@@ -181,7 +174,17 @@ DATA_SOURCE = {
     'Clothing_Shoes_Bags': ["袜子", "内裤", "帽子", "手套", "鞋", "T恤", "裤", "外套", "修裤脚"],
     'Adult_Products': ["避孕套", "成人润滑剂", "安全套", "Condoms"],
     'SERVER': ["节点", "Dler", "Dogess"],
-    'Furniture_HomeTextiles': ["被子", "空调被", "枕头", "浴巾", "床笠"]
+    'Furniture_HomeTextiles': ["被子", "空调被", "枕头", "浴巾", "床笠"],
+    # --- 报销相关 ---
+    'REIM_TRAVEL': [
+        "车船费", "住宿费", "住宿补贴", "交通补贴", "餐费补贴"
+    ],
+    'REIM_EXPENSE': [
+        "材料费", "燃油费", "交通费", "过路费", "租赁费",
+        "叉车费", "停车费", "印刷服务", "物流运输", "市内交通",
+        "生活用品", "人工劳务费",
+        "代付货款", "招待费", "汽车费用", "代付"
+    ]
 }
 
 INGREDIENT_PRIORITY = [
@@ -474,24 +477,35 @@ def process_heuristics(df, main_col, sub_col):
 
     # 1.4 食材/日用/零食 (保留空名称)
     mask_meal = search_series.str.contains(PATTERNS['MEAL'], regex=True)
+    
+    # [BUG FIX] 对于INGREDIENTS，需要先检测是否有精确匹配食材关键词
+    # 例如"生水饺"应该优先匹配INGREDIENTS而非MEAL中的"水饺"
+    mask_ingredients_exact = search_series.str.contains(PATTERNS['INGREDIENTS'], regex=True)
+    
     main_filter = uncat | (df[main_col].isin(['购物', '居家', '饮食']))
     for key, name, sub_c in INGREDIENT_PRIORITY:
         pat = PATTERNS[key]
-        mask = search_series.str.contains(
-            pat, regex=True) & (~mask_meal) & main_filter
+        # 对于INGREDIENTS类别，不排除meal匹配（让精确的食材关键词优先）
+        if key == 'INGREDIENTS':
+            mask = search_series.str.contains(pat, regex=True) & main_filter
+        else:
+            # 对于其他类别，排除meal匹配，但如果同时匹配了INGREDIENTS则不排除
+            mask = search_series.str.contains(pat, regex=True) & (
+                (~mask_meal) | mask_ingredients_exact) & main_filter
         if key in ['SEAFOOD', 'PORK', 'POULTRY', 'BEEF_MUTTON', 'VEGETABLE']:
             mask &= (~search_series.str.contains(
                 PATTERNS['COOKED'], regex=True))
         if mask.any():
             df.loc[mask, [sub_col, '名称']] = [sub_c, name]
 
-    # 1.5 停车/借贷
+    # 1.5 停车/借贷/报销
     mask = search_series.str.contains(PATTERNS['Parking_fee'], regex=True)
     if mask.any():
         df.loc[mask, [sub_col, '名称', '对象']] = ['报账', '停车费', '天之逸']
 
-    keys = ['报账', '借出', '代付', '押金', '借入']
-    debt_pat = rf"({'|'.join(keys)})\s*(.*)"
+    # 借贷关键词：借入xxx, 借出xxx, 代付xxx, 押金xxx, 报账xxx
+    debt_keys = ['报账', '借出', '代付', '押金', '借入']
+    debt_pat = rf"({'|'.join(debt_keys)})\s*(.*)"
     extracted = df['描述'].str.extract(debt_pat, expand=True)
     mask_found = extracted[0].notna()
     if mask_found.any():
@@ -501,8 +515,101 @@ def process_heuristics(df, main_col, sub_col):
             df.loc[mask_obj, '对象'] = extracted[1].str.strip()
         df.loc[mask_found, ['项目', '描述']] = ""
 
+    # 报销关键词（无点语法）：住宿费xxx, 材料费xxx 等
+    reim_travel_keys = ["车船费", "住宿费", "住宿补贴", "交通补贴", "餐费补贴"]
+    reim_expense_keys = [
+        "材料费", "燃油费", "交通费", "过路费", "租赁费",
+        "叉车费", "停车费", "印刷服务", "物流运输", "市内交通",
+        "生活用品", "人工劳务费", "代付货款", "招待费", "汽车费用"
+    ]
+    all_reim_keys = reim_travel_keys + reim_expense_keys
+    reim_pat = rf"^({'|'.join(all_reim_keys)})(.*)"
+    reim_extracted = df['描述'].str.extract(reim_pat, expand=True)
+    mask_reim = reim_extracted[0].notna()
+    if mask_reim.any():
+        df.loc[mask_reim, sub_col] = '报账'
+        df.loc[mask_reim, '对象'] = '天之逸'
+        df.loc[mask_reim, '名称'] = reim_extracted[0].loc[mask_reim].values
+        df.loc[mask_reim, '描述'] = reim_extracted[1].loc[mask_reim].str.strip().values
+        df.loc[mask_reim, '项目'] = ""
+        # 设置标签
+        mask_travel = reim_extracted[0].isin(reim_travel_keys) & mask_reim
+        mask_expense = reim_extracted[0].isin(reim_expense_keys) & mask_reim
+        if mask_travel.any():
+            df.loc[mask_travel, '标签'] = '差旅报销'
+        if mask_expense.any():
+            df.loc[mask_expense, '标签'] = '费用报销'
+
+    # 1.5.2 通用分类词（无点语法统一管理）
+    # 所有子类别 + 名称关键词，格式：关键词xxx → 子类别设置，描述为xxx
+    
+    # 子类别关键词映射
+    subcat_keywords = {
+        # 直接映射到子类别
+        '日用': '日常用品',
+        '食材': '食材',
+        '零食': '零食',
+        '饮料水果': '饮料水果',
+        '纯净水': '纯净水',
+        '早餐': '早餐',
+        '午餐': '午餐',
+        '晚餐': '晚餐',
+        '夜宵': '夜宵',
+    }
+    
+    # 名称关键词映射 (名称 → 子类别)
+    name_keywords = {
+        '水果': ('饮料水果', '水果'),
+        '饮料': ('饮料水果', '饮料'),
+        '蔬菜': ('食材', '蔬菜'),
+        '猪肉': ('食材', '猪肉'),
+        '牛羊肉': ('食材', '牛羊肉'),
+        '禽肉': ('食材', '禽肉'),
+        '海鲜水产': ('食材', '海鲜水产'),
+        '豆制品': ('食材', '豆制品'),
+        '熟食': ('食材', '熟食'),
+        '大米': ('食材', '大米'),
+    }
+    
+    # 合并所有关键词（按长度降序，优先匹配长的）
+    all_generic_keys = list(subcat_keywords.keys()) + list(name_keywords.keys()) + ['正餐']
+    all_generic_keys = sorted(all_generic_keys, key=len, reverse=True)
+    
+    generic_pat = rf"^({'|'.join(map(re.escape, all_generic_keys))})(.*)"
+    generic_extracted = df['描述'].str.extract(generic_pat, expand=True)
+    mask_generic = generic_extracted[0].notna() & (df[sub_col] == "")
+    
+    if mask_generic.any():
+        matched_keys = generic_extracted[0].loc[mask_generic]
+        tails = generic_extracted[1].loc[mask_generic].str.strip()
+        
+        for idx in mask_generic[mask_generic].index:
+            key = matched_keys.loc[idx]
+            tail = tails.loc[idx]
+            
+            if key == '正餐':
+                # 正餐特殊处理：只切分描述，不设置子类别，让它走时间推导
+                df.loc[idx, '描述'] = tail
+                df.loc[idx, '名称'] = ""
+            elif key in subcat_keywords:
+                # 子类别关键词：设置子类别
+                df.loc[idx, sub_col] = subcat_keywords[key]
+                df.loc[idx, '描述'] = tail
+                df.loc[idx, '名称'] = ""
+            elif key in name_keywords:
+                # 名称关键词：设置子类别和名称
+                sub_c, name = name_keywords[key]
+                df.loc[idx, sub_col] = sub_c
+                df.loc[idx, '名称'] = name
+                df.loc[idx, '描述'] = tail
+
     # 1.6 MEAL 自动推导的时间段分类 (名称留空)
-    mask_time_meal = (df[sub_col] == "") & mask_meal
+    # [BUG FIX] 排除预付款/定期付款商家，不做时间段推导
+    exclude_from_time_meal = ['斯迪姆幼儿园', '幼儿园']
+    exclude_pattern = '|'.join(exclude_from_time_meal)
+    mask_exclude_merchant = search_series.str.contains(exclude_pattern, na=False, regex=True)
+    
+    mask_time_meal = (df[sub_col] == "") & mask_meal & (~mask_exclude_merchant)
     if mask_time_meal.any():
         h = df.loc[mask_time_meal, '交易时间'].dt.hour
         conditions = [(h >= 6) & (h < 11), (h >= 11) &
@@ -510,6 +617,11 @@ def process_heuristics(df, main_col, sub_col):
         choices = ["早餐", "午餐", "晚餐"]
         df.loc[mask_time_meal, sub_col] = np.select(
             conditions, choices, default="夜宵")
+    
+    # 被排除的商家设为正餐
+    mask_excluded_meal = (df[sub_col] == "") & mask_meal & mask_exclude_merchant
+    if mask_excluded_meal.any():
+        df.loc[mask_excluded_meal, sub_col] = "正餐"
 
     # =========================================================================
     # Phase 2 & 3: 点语法强力覆盖 (Dot Syntax Override)
@@ -526,23 +638,8 @@ def process_heuristics(df, main_col, sub_col):
         valid_subcats_set = set(VALID_SUBCATS)
         generic_keywords = valid_subcats_set.union({'正餐', '日用'})
 
-        ty_reim_keys = [
-            "材料费", "车船费", "代付货款", "过路费",
-            "交通费", "汽车费用", "市内交通", "招待费", "住宿费"
-        ]
-
-        # --- A. 报销关键词 ---
-        mask_is_reim = heads.isin(ty_reim_keys)
-        if mask_is_reim.any():
-            idx = mask_is_reim
-            df.loc[idx, sub_col] = '报账'
-            df.loc[idx, '对象'] = '天之逸'
-            df.loc[idx, '名称'] = heads.loc[idx].values
-            df.loc[idx, '描述'] = tails.loc[idx].values
-            df.loc[idx, '项目'] = ""
-
-        # --- B. 通用分类词 (正餐/日用/食材...) ---
-        mask_is_generic = heads.isin(generic_keywords) & (~mask_is_reim)
+        # --- A. 通用分类词 (正餐/日用/食材...) ---
+        mask_is_generic = heads.isin(generic_keywords)
         if mask_is_generic.any():
             idx = mask_is_generic
             df.loc[idx, '描述'] = tails.loc[idx].values
@@ -550,6 +647,16 @@ def process_heuristics(df, main_col, sub_col):
             if mask_valid_sub.any():
                 sub_idx = mask_valid_sub
                 df.loc[sub_idx, sub_col] = heads.loc[sub_idx].values
+            df.loc[idx, '名称'] = ""
+
+        # --- B. 点语法但head不是预定义关键词：只切分描述，清空名称 ---
+        # 例如: "苹果.红富士" → 描述变为".红富士", 名称清空
+        mask_has_dot = tails != ""  # 有点号分隔符
+        mask_unhandled = mask_has_dot & (~mask_is_generic)
+        if mask_unhandled.any():
+            idx = mask_unhandled
+            # 保留完整的 ".tail" 作为描述，便于区分
+            df.loc[idx, '描述'] = "." + tails.loc[idx].values
             df.loc[idx, '名称'] = ""
 
     mapped_values = df[sub_col].map(AUTO_MAP_DICT)
@@ -567,7 +674,7 @@ def process_heuristics(df, main_col, sub_col):
 
 
 def process_main(df, df_rules, main_col, sub_col):
-    for c in ['当前状态', '收/支', '交易对方', '交易时间']:
+    for c in ['当前状态', '收/支', '交易对方', '交易时间', '备注']:
         if c not in df.columns:
             df[c] = ""
     df = df[
@@ -575,7 +682,15 @@ def process_main(df, df_rules, main_col, sub_col):
         (abs(df["金额"]) > 0.0001)
     ].copy()
 
-    df = df[df["收/支"] == "支出"].copy()
+    # [BUG FIX] 借入/借出等债务关键词检测：在收支筛选前先标记
+    # 将备注中包含债务关键词的记录也保留下来，不只是"支出"
+    debt_keywords = ['报账', '借出', '代付', '押金', '借入']
+    debt_pattern = '|'.join(debt_keywords)
+    memo_series = df['备注'].astype(str).str.strip()
+    mask_has_debt_keyword = memo_series.str.contains(debt_pattern, na=False, regex=True)
+    
+    # 修改筛选条件：支出 OR 包含债务关键词
+    df = df[(df["收/支"] == "支出") | mask_has_debt_keyword].copy()
 
     if df.empty:
         return pd.DataFrame()
@@ -691,7 +806,7 @@ def save_result(df, cols):
 
 
 def main():
-    print(f"{BColors.BOLD}=== Moze 导入脚本 v11.63 (Snowball Auto-Transfer) ==={BColors.ENDC}")
+    print(f"{BColors.BOLD}=== Moze 导入脚本 v11.64 (Bug Fixes) ==={BColors.ENDC}")
     try:
         load_settings(RULE_BOOK_PATH)
         df_rules = load_rules(RULE_BOOK_PATH)
