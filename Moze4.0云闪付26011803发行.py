@@ -8,25 +8,19 @@ Moze 4.0 审计日志版 (Audit Log)
 3. 【全功能集成】: 包含智能拼接、倒序跨年、名字去噪、闭环验证等所有核心科技。
 """
 
-from tkinter import filedialog
-from pathlib import Path
-import tkinter as tk
-import easyocr
-import re
-import datetime
-import pandas as pd
-import cv2
-import numpy as np
-import sys
+# from tkinter import filedialog
+# from pathlib import Path
+# import tkinter as tk
+# import easyocr
+# import re
+# import datetime
+# import pandas as pd
+# import cv2
+# import numpy as np
+# import sys
 import os
 # 🚑 防报错补丁 (必须放在所有 import 之前，除了 os)
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
-<<<<<<< HEAD
-# -----------------  ------------------------------------
-# 👇 在下面这些 import 后面加上  # noqa: E402
-# 这告诉格式化工具：忽略“import不在开头”的警告，不要移动它们
-# --------------------------------------------------------
 
 import sys  # noqa: E402
 import numpy as np  # noqa: E402
@@ -37,9 +31,7 @@ import re  # noqa: E402
 import easyocr  # noqa: E402
 import tkinter as tk  # noqa: E402
 from tkinter import filedialog  # noqa: E402
-
-=======
->>>>>>> b2878591ca7f4d980e05b8a20c4fefa413e853bb
+from pathlib import Path # noqa: E402
 
 # ==============================================================================
 # ⚙️ 用户配置
