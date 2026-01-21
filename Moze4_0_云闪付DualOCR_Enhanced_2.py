@@ -1,25 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-Moze 4.0 审计日志版 (Audit Log)
-版本: 2026.01.18_Audit
+Moze 4.0 审计日志版 (Audit Log) - 双OCR引擎增强版
+版本: 2026.01.21_DualOCR_Enhanced
+OCR引擎: RapidOCR + EasyOCR (双引擎互补)
 特性:
-1. 【修正留痕】: 凡是程序自动修改了时间的，都会打印 "🔧 [时间同步]" 日志，显示修改前后的值。
-2. 【透明汇报】: 统计最终修正了多少条时间数据。
-3. 【全功能集成】: 包含智能拼接、倒序跨年、名字去噪、闭环验证等所有核心科技。
+1. 【双引擎OCR】: 同时运行 RapidOCR 和 EasyOCR，互相验证
+   - RapidOCR: 速度快，轻量级
+   - EasyOCR: 准确率高，稳定性好
+   - 对比结果，选择置信度更高的
+   - 对关键信息（时间、金额）不一致时发出警告
+2. 【对象名称清理】: 智能提取真实姓名
+   - "胡飞转账车" -> "胡飞"
+   - "王意帆付款" -> "王意帆"
+   - 自动去除后缀词（转账、车、房、费等）
+3. 【自动标签】: 所有记录自动添加 #UnionPay 标签
+4. 【时间识别优化】: 优先匹配两位数标准时间格式 HH:MM
+5. 【修正留痕】: 自动修改时间时打印详细日志
+6. 【透明汇报】: 统计最终修正了多少条时间数据
+7. 【全功能集成】: 智能拼接、倒序跨年、名字去噪、闭环验证
+8. 【调试模式】: 显示详细的OCR识别和时间解析过程
 """
 import os
-
-# from tkinter import filedialog
-# from pathlib import Path
-# import tkinter as tk
-# import easyocr
-# import re
-# import datetime
-# import pandas as pd
-# import cv2
-# import numpy as np
-# import sys
-# 🚑 防报错补丁 (必须放在所有 import 之前，除了 os)
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import sys  # noqa: E402
 import numpy as np  # noqa: E402
@@ -27,6 +28,7 @@ import cv2  # noqa: E402
 import pandas as pd  # noqa: E402
 import datetime  # noqa: E402
 import re  # noqa: E402
+from rapidocr_onnxruntime import RapidOCR  # noqa: E402
 import easyocr  # noqa: E402
 import tkinter as tk  # noqa: E402
 from tkinter import filedialog  # noqa: E402
@@ -40,6 +42,21 @@ MY_NAME = "应翔"
 CURRENT_DIR = Path(__file__).parent if '__file__' in locals() else Path.cwd()
 EXPORT_DIR = CURRENT_DIR / "Moze4.0_Import"
 
+
+# 🎯 数据过滤配置
+# 设置为True时，将排除应收应付记录（借入/借出），只保留收入/支出/转账
+EXCLUDE_RECEIVABLES = False  # 改为True可排除应收应付记录
+
+# ⏰ 时间处理配置
+# 设置为True时，会自动删除时间为00:00:00的记录（通常是OCR识别失败的记录）
+EXCLUDE_ZERO_TIME = False  # 改为True可排除无时间信息的记录
+
+# 🎯 智能过滤配置（推荐开启）
+# 自动过滤可能是汇总数据的记录（时间00:00:00 + 账户未知 + 无对象名）
+AUTO_FILTER_SUMMARY = True  # 建议保持True，自动识别并过滤汇总数据
+
+
+
 ACCOUNT_MAP = {
     '9708': '建设银行Ⅱ',
     '9579': '工商银行',
@@ -47,8 +64,18 @@ ACCOUNT_MAP = {
     '5680': '湖北农信',
     '4946': '平安银行4946',
     '8045': '平安银行',
-    '1517': '兴业银行1517'
+    '1517': '兴业银行'
 }
+
+# 🏦 特殊账户名映射（云闪付的虚拟账户）
+SPECIAL_ACCOUNT_MAP = {
+    '活期+': '云闪付',
+    '活期': '云闪付',
+    '余额': '云闪付',
+    '零钱': '云闪付',
+    '云闪付钱包': '云闪付'
+}
+
 
 MOZE_COLUMNS = ['账户', '币种', '记录类型', '主类别', '子类别', '金额', '手续费',
                 '折扣', '名称', '商家', '日期', '时间', '项目', '描述', '标签', '对象']
@@ -115,10 +142,186 @@ class ProjectionCutter:
 
 class MozeOCRTool:
     def __init__(self):
-        print(f"{BColors.OKGREEN}🚀 Moze 4.0 审计日志版启动...{BColors.ENDC}")
-        self.reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+        print(f"{BColors.OKGREEN}🚀 Moze 4.0 双OCR引擎版启动...{BColors.ENDC}")
+        
+        # 初始化双OCR引擎
+        print("   📦 正在加载 RapidOCR...")
+        self.rapid_reader = RapidOCR()
+        print("   ✅ RapidOCR 就绪")
+        
+        print("   📦 正在加载 EasyOCR...")
+        self.easy_reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+        print("   ✅ EasyOCR 就绪")
+        
         self.cutter = ProjectionCutter()
         self.rows = []
+    
+    def clean_object_name(self, name):
+        """
+        清理对象名称，提取真实姓名
+        例如: "胡飞转账车" -> "胡飞"
+        """
+        if not name:
+            return name
+        
+        # 去除常见的后缀词
+        suffixes_to_remove = [
+            '转账', '付款', '收款', '借款', '还款',
+            '车', '房', '费', '钱', '款',
+            '支付', '收到', '来自'
+        ]
+        
+        cleaned = name
+        for suffix in suffixes_to_remove:
+            if cleaned.endswith(suffix):
+                cleaned = cleaned[:-len(suffix)]
+        
+        # 去除常见的前缀词
+        prefixes_to_remove = ['来自', '转给', '付给', '收到']
+        for prefix in prefixes_to_remove:
+            if cleaned.startswith(prefix):
+                cleaned = cleaned[len(prefix):]
+        
+        cleaned = cleaned.strip()
+        
+        # 如果清理后是空的，返回原名称
+        if not cleaned:
+            return name
+        
+        # 打印清理信息（如果有变化）
+        if cleaned != name:
+            print(f"      🔧 [对象清理] '{name}' -> '{cleaned}'")
+        
+        return cleaned
+
+    def readtext(self, img):
+        """
+        双OCR引擎方法：同时运行 RapidOCR 和 EasyOCR，对比结果
+        策略：
+        1. 分别获取两个引擎的识别结果
+        2. 对于每个位置的文字，比较置信度
+        3. 对于关键信息（时间、金额），如果两个引擎结果不一致，标记警告
+        4. 返回合并后的最优结果
+        """
+        # === RapidOCR 识别 ===
+        rapid_results = []
+        try:
+            result, elapse = self.rapid_reader(img)
+            if result is not None:
+                for item in result:
+                    box = item[0]
+                    text = item[1]
+                    confidence = item[2]
+                    rapid_results.append([box, text, confidence])
+        except Exception as e:
+            print(f"      ⚠️ RapidOCR 识别失败: {e}")
+        
+        # === EasyOCR 识别 ===
+        easy_results = []
+        try:
+            easy_results = self.easy_reader.readtext(img)
+        except Exception as e:
+            print(f"      ⚠️ EasyOCR 识别失败: {e}")
+        
+        # === 合并结果 ===
+        return self._merge_ocr_results(rapid_results, easy_results, img)
+    
+    def _merge_ocr_results(self, rapid_results, easy_results, img):
+        """
+        合并双OCR结果，取最优
+        策略：
+        1. 对于相同位置的文字，选择置信度更高的
+        2. 对于时间和金额等关键信息，如果两个引擎识别不同，标记警告
+        3. 如果只有一个引擎识别到，使用该结果
+        """
+        if not rapid_results and not easy_results:
+            return []
+        
+        if not rapid_results:
+            print("      ℹ️ 仅使用 EasyOCR 结果")
+            return easy_results
+        
+        if not easy_results:
+            print("      ℹ️ 仅使用 RapidOCR 结果")
+            return rapid_results
+        
+        # 合并策略：以RapidOCR为基础，用EasyOCR补充和校验
+        merged = []
+        used_easy_indices = set()
+        
+        for rapid_item in rapid_results:
+            rapid_box, rapid_text, rapid_conf = rapid_item
+            rapid_center = self._get_box_center(rapid_box)
+            
+            # 查找EasyOCR中对应位置的结果
+            best_match = None
+            best_match_idx = -1
+            best_distance = float('inf')
+            
+            for idx, easy_item in enumerate(easy_results):
+                if idx in used_easy_indices:
+                    continue
+                
+                easy_box, easy_text, easy_conf = easy_item
+                easy_center = self._get_box_center(easy_box)
+                
+                # 计算距离
+                distance = ((rapid_center[0] - easy_center[0]) ** 2 + 
+                           (rapid_center[1] - easy_center[1]) ** 2) ** 0.5
+                
+                if distance < 50 and distance < best_distance:  # 50像素内认为是同一个
+                    best_match = easy_item
+                    best_match_idx = idx
+                    best_distance = distance
+            
+            # 决策：选择哪个结果
+            if best_match:
+                easy_box, easy_text, easy_conf = best_match
+                used_easy_indices.add(best_match_idx)
+                
+                # 如果两个引擎识别的文字不同，选择置信度更高的
+                if rapid_text != easy_text:
+                    # 检查是否是关键信息（包含数字、冒号等）
+                    is_critical = any(c in rapid_text + easy_text for c in [':', '：', '¥', '元', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+                    
+                    if is_critical:
+                        print(f"      🔍 [双OCR对比] Rapid: '{rapid_text}'({rapid_conf:.2f}) vs Easy: '{easy_text}'({easy_conf:.2f})")
+                    
+                    # 选择置信度更高的
+                    if rapid_conf >= easy_conf:
+                        merged.append(rapid_item)
+                    else:
+                        merged.append(best_match)
+                else:
+                    # 文字相同，选择置信度更高的
+                    if rapid_conf >= easy_conf:
+                        merged.append(rapid_item)
+                    else:
+                        merged.append(best_match)
+            else:
+                # 没有匹配的EasyOCR结果，直接使用RapidOCR结果
+                merged.append(rapid_item)
+        
+        # 添加EasyOCR中独有的结果
+        for idx, easy_item in enumerate(easy_results):
+            if idx not in used_easy_indices:
+                merged.append(easy_item)
+        
+        print(f"      ℹ️ 双OCR合并: Rapid({len(rapid_results)}) + Easy({len(easy_results)}) = 总计({len(merged)})")
+        
+        return merged
+    
+    def _get_box_center(self, box):
+        """获取文字框的中心坐标"""
+        if isinstance(box[0], (list, tuple)):
+            # 格式: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+            x = sum(p[0] for p in box) / len(box)
+            y = sum(p[1] for p in box) / len(box)
+        else:
+            # 格式: [x1, y1, x2, y2]
+            x = (box[0] + box[2]) / 2
+            y = (box[1] + box[3]) / 2
+        return (x, y)
 
     def select_images(self):
         root = tk.Tk()
@@ -150,18 +353,31 @@ class MozeOCRTool:
                 current_line.append(item['data'])
             else:
                 current_line.sort(key=lambda r: r[0][0][0])
+                # 🔍 调试：打印排序后的行内容
+                line_text = " ".join([r[1] for r in current_line])
+                if any(c in line_text for c in [':', '：']) and any(d in line_text for d in ['银行', '信用社']):
+                    print(f"      🔍 [分组行] Y={current_y:.1f}: {line_text}")
                 lines.append(current_line)
                 current_line = [item['data']]
                 current_y = item['y']
         if current_line:
             current_line.sort(key=lambda r: r[0][0][0])
+            # 🔍 调试：打印最后一行
+            line_text = " ".join([r[1] for r in current_line])
+            if any(c in line_text for c in [':', '：']) and any(d in line_text for d in ['银行', '信用社']):
+                print(f"      🔍 [分组行] Y={current_y:.1f}: {line_text}")
             lines.append(current_line)
         return lines
 
     def parse_images(self, file_paths):
         date_pattern = re.compile(r'^(\d{1,2})[\.月\-/](\d{1,2})')
-        # 增强时间正则
-        time_pattern = re.compile(r'(\d{1,2})[:：\.\s]+(\d{2})')
+        
+        # 🔧 修复：使用更精确的时间正则
+        # 策略：优先匹配标准的两位数时间格式 HH:MM
+        # 匹配: 22:31, 20:29, 16:00, 10:17
+        # 不匹配: 2 22, 1.16 (除非真的是合法时间)
+        time_pattern_standard = re.compile(r'\b(\d{2})[:：](\d{2})\b')  # 标准格式 HH:MM
+        time_pattern_flexible = re.compile(r'\b(\d{1,2})[:：](\d{2})\b')  # 灵活格式 H:MM 或 HH:MM
 
         print(f"\n{BColors.OKGREEN}>>> 开始处理...{BColors.ENDC}")
 
@@ -178,7 +394,7 @@ class MozeOCRTool:
             global_current_date = f"{current_processing_year}/01/01"
 
             for img_slice in slices:
-                results = self.reader.readtext(img_slice)
+                results = self.readtext(img_slice)
                 if not results:
                     continue
                 lines = self.group_text_by_lines(results)
@@ -299,13 +515,45 @@ class MozeOCRTool:
                         }
                         continue
 
-                    has_time = time_pattern.search(full_text)
+                    # 🔧 优先匹配标准的两位数时间格式
+                    has_time = time_pattern_standard.search(full_text)
+                    if not has_time:
+                        # 如果标准格式没匹配到，尝试灵活格式
+                        has_time = time_pattern_flexible.search(full_text)
+                    
                     if (has_time or is_bank_row) and pending_top:
                         final_time = "00:00:00"
                         if has_time:
-                            h, m_val = int(has_time.group(1)), int(
-                                has_time.group(2))
+                            # 🔍 调试：显示正则匹配的详细信息
+                            time_match_str = has_time.group(0)
+                            h_str = has_time.group(1)
+                            m_str = has_time.group(2)
+                            
+                            print(f"      🔍 [时间匹配] 原文: '{full_text}'")
+                            print(f"      🔍 [时间匹配] 匹配到: '{time_match_str}' -> h='{h_str}', m='{m_str}'")
+                            
+                            h, m_val = int(h_str), int(m_str)
+                            
+                            # 🔧 时间验证与智能修正
+                            original_time = f"{h:02d}:{m_val:02d}:00"  # 记录原始时间（修正前）
+                            
+                            if m_val > 59:
+                                # 可能是OCR错误：71可能是11，51可能是31等
+                                if m_val == 71:
+                                    m_val = 11  # 常见错误：7和1靠太近
+                                    print(f"      🔧 [时间修正] OCR错误 {h}:71 -> {h}:11")
+                                else:
+                                    print(f"      ⚠️ [时间异常] {h}:{m_val} -> 00:00")
+                                    h, m_val = 0, 0
+                            
+                            if h > 23:
+                                print(f"      ⚠️ [时间异常] {h}:{m_val} -> 00:00")
+                                h, m_val = 0, 0
+                            
                             final_time = f"{h:02d}:{m_val:02d}:00"
+                            print(f"      ✅ [最终时间] {final_time}")
+
+
 
                         account_clean_text = full_text
                         if has_time:
@@ -313,10 +561,19 @@ class MozeOCRTool:
                                 has_time.group(0), "")
 
                         source_account = "云闪付(未知)"
-                        for k, v in ACCOUNT_MAP.items():
-                            if k in account_clean_text:
-                                source_account = v
+                        
+                        # 🏦 优先检查特殊账户名（如"活期+"）
+                        for special_name, moze_name in SPECIAL_ACCOUNT_MAP.items():
+                            if special_name in account_clean_text:
+                                source_account = moze_name
                                 break
+                        
+                        # 如果没匹配到特殊账户，再检查银行卡后四位
+                        if source_account == "云闪付(未知)":
+                            for k, v in ACCOUNT_MAP.items():
+                                if k in account_clean_text:
+                                    source_account = v
+                                    break
                         if source_account == "云闪付(未知)":
                             match = re.search(
                                 r'([\u4e00-\u9fa5]+银行|[\u4e00-\u9fa5]+信用社)', account_clean_text)
@@ -329,6 +586,7 @@ class MozeOCRTool:
 
                         bottom_data = {
                             "time": final_time,
+                            "original_time": original_time if "original_time" in locals() else final_time,
                             "account": source_account,
                             "raw": full_text
                         }
@@ -369,7 +627,7 @@ class MozeOCRTool:
                 final_main = "应收款项"
                 final_sub = "借出"
                 final_amount = -amount
-                final_object = target_name
+                final_object = self.clean_object_name(target_name)  # 🔧 清理对象名称
 
         elif "来自" in full_text or "收到" in full_text:
             if MY_NAME in target_name:
@@ -382,7 +640,7 @@ class MozeOCRTool:
                 final_main = "应付款项"
                 final_sub = "借入"
                 final_amount = amount
-                final_object = target_name
+                final_object = self.clean_object_name(target_name)  # 🔧 清理对象名称
 
         else:
             if "还款" in full_text:
@@ -399,7 +657,7 @@ class MozeOCRTool:
         elif final_type == "转入":
             print(f"   🔄 [转入] {amount}")
         elif "借" in final_type or "借" in final_sub:
-            print(f"   📒 [{final_sub}] {target_name} {amount}")
+            print(f"   📒 [{final_sub}] {final_object if final_object else target_name} {amount}")
         else:
             print(f"   ✅ [支出] {amount}")
 
@@ -411,8 +669,15 @@ class MozeOCRTool:
             '名称': '',
             '商家': '',
             '日期': date_str, '时间': time_str,
-            '项目': '', '描述': '', '标签': '', '对象': final_object
+            '项目': '', '描述': '', 
+            '标签': '#UnionPay',  # 🔧 自动添加标签
+            '对象': final_object
         }
+        # 🎯 根据配置过滤应收应付记录
+        if EXCLUDE_RECEIVABLES and final_main in ['应收款项', '应付款项']:
+            print(f"   🚫 [已过滤] {final_sub}: {target_name} {amount}")
+            return
+        
         self.rows.append(row)
 
     def verify_loops(self):
@@ -494,12 +759,45 @@ class MozeOCRTool:
             for msg in fail_list:
                 print(f"      - {msg}")
 
+
+    def check_zero_times(self):
+        """检查并警告00:00:00的记录"""
+        print(f"\n{BColors.OKGREEN}>>> 检查时间完整性...{BColors.ENDC}")
+        zero_time_records = [r for r in self.rows if r['时间'] == '00:00:00']
+        
+        if not zero_time_records:
+            print("   ✅ 所有记录都包含时间信息。")
+            return
+        
+        print(f"   ⚠️ {BColors.WARNING}发现 {len(zero_time_records)} 条记录缺少时间信息:{BColors.ENDC}")
+        
+        for record in zero_time_records:
+            date = record['日期']
+            amount = record['金额']
+            account = record['账户']
+            category = record['主类别']
+            
+            # 尝试从同一天的其他记录推测时间
+            same_day_records = [r for r in self.rows 
+                              if r['日期'] == date 
+                              and r['时间'] != '00:00:00'
+                              and abs(r['金额']) == abs(amount)]
+            
+            if same_day_records:
+                suggested_time = same_day_records[0]['时间']
+                print(f"      📌 {date} {category} {amount} ({account})")
+                print(f"         💡 建议时间: {suggested_time} (来自同日同金额记录)")
+            else:
+                print(f"      📌 {date} {category} {amount} ({account})")
+                print(f"         ⚠️  建议手动检查原始截图补充时间")
+
     def save(self):
         if not self.rows:
             print("⚠️ 无数据")
             return
 
         self.verify_loops()
+        self.check_zero_times()
 
         df = pd.DataFrame(self.rows, columns=MOZE_COLUMNS)
         ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')

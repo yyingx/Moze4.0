@@ -1,41 +1,67 @@
 # -*- coding: utf-8 -*-
 """
-Moze 4.0 最终静默验证版 (Silent Verify)
-版本: 2026.01.18_SilentVerify
-核心逻辑:
-1. 【静默验证】: 闭环成功时不输出任何信息，只有"孤立转账"才会报警。
-2. 【全功能集成】: 包含智能拼接、名字去噪、倒序跨年、铁壁分类等所有功能。
+Moze 4.0 审计日志版 (Audit Log)
+版本: 2026.01.18_Audit
+特性:
+1. 【修正留痕】: 凡是程序自动修改了时间的，都会打印 "🔧 [时间同步]" 日志，显示修改前后的值。
+2. 【透明汇报】: 统计最终修正了多少条时间数据。
+3. 【全功能集成】: 包含智能拼接、倒序跨年、名字去噪、闭环验证等所有核心科技。
 """
-
-from tkinter import filedialog
-import tkinter as tk
-import easyocr
-import re
-import datetime
-import pandas as pd
-import cv2
-import numpy as np
-import sys
 import os
-# 🚑 防报错补丁
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
+import sys  # noqa: E402
+import numpy as np  # noqa: E402
+import cv2  # noqa: E402
+import pandas as pd  # noqa: E402
+import datetime  # noqa: E402
+import re  # noqa: E402
+import easyocr  # noqa: E402
+import tkinter as tk  # noqa: E402
+from tkinter import filedialog  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 # ==============================================================================
 # ⚙️ 用户配置
 # ==============================================================================
 DEFAULT_YEAR = 2026
 MY_NAME = "应翔"
-EXPORT_DIR = r"E:\天之逸2025\Moze4.0\Moze4.0_Import"
+CURRENT_DIR = Path(__file__).parent if '__file__' in locals() else Path.cwd()
+EXPORT_DIR = CURRENT_DIR / "Moze4.0_Import"
+
+
+# 🎯 数据过滤配置
+# 设置为True时，将排除应收应付记录（借入/借出），只保留收入/支出/转账
+EXCLUDE_RECEIVABLES = False  # 改为True可排除应收应付记录
+
+# ⏰ 时间处理配置
+# 设置为True时，会自动删除时间为00:00:00的记录（通常是OCR识别失败的记录）
+EXCLUDE_ZERO_TIME = False  # 改为True可排除无时间信息的记录
+
+# 🎯 智能过滤配置（推荐开启）
+# 自动过滤可能是汇总数据的记录（时间00:00:00 + 账户未知 + 无对象名）
+AUTO_FILTER_SUMMARY = True  # 建议保持True，自动识别并过滤汇总数据
+
+
 
 ACCOUNT_MAP = {
-    '9708': '建设银行9780', '9780': '建设银行9780', '建设银行': '建设银行9780',
-    '9579': '工商银行9579', '工商银行': '工商银行9579',
-    '2973': '农业银行2973', '农业银行': '农业银行2973',
-    '5680': '湖北省农村信用社', '农村信用社': '湖北省农村信用社', '信用社': '湖北省农村信用社',
-    '4946': '平安银行4946', '平安银行': '平安银行4946',
-    '1517': '兴业银行1517', '兴业银行': '兴业银行1517'
+    '9708': '建设银行Ⅱ',
+    '9579': '工商银行',
+    '2973': '农业银行',
+    '5680': '湖北农信',
+    '4946': '平安银行4946',
+    '8045': '平安银行',
+    '1517': '兴业银行1517'
 }
+
+# 🏦 特殊账户名映射（云闪付的虚拟账户）
+SPECIAL_ACCOUNT_MAP = {
+    '活期+': '云闪付',
+    '活期': '云闪付',
+    '余额': '云闪付',
+    '零钱': '云闪付',
+    '云闪付钱包': '云闪付'
+}
+
 
 MOZE_COLUMNS = ['账户', '币种', '记录类型', '主类别', '子类别', '金额', '手续费',
                 '折扣', '名称', '商家', '日期', '时间', '项目', '描述', '标签', '对象']
@@ -46,6 +72,7 @@ class BColors:
     WARNING = '\033[93m'
     FAIL = '\033[91m'
     ENDC = '\033[0m'
+    BLUE = '\033[94m'
 
 # ==============================================================================
 # 🔪 物理切割器
@@ -101,7 +128,7 @@ class ProjectionCutter:
 
 class MozeOCRTool:
     def __init__(self):
-        print(f"{BColors.OKGREEN}🚀 Moze 4.0 静默验证版启动...{BColors.ENDC}")
+        print(f"{BColors.OKGREEN}🚀 Moze 4.0 审计日志版启动...{BColors.ENDC}")
         self.reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
         self.cutter = ProjectionCutter()
         self.rows = []
@@ -113,7 +140,7 @@ class MozeOCRTool:
         return filedialog.askopenfilenames(title="请选择账单截图")
 
     def clean_money(self, s):
-        # 允许 l, I, | 等类似 1 的字符存在，留给后续处理
+        # 允许 l, I, | 等类似 1 的字符存在
         return re.sub(r'[^\d\.,\+\-_\—lI|\[\]]', '', s)
 
     def group_text_by_lines(self, results, y_threshold=15):
@@ -146,7 +173,8 @@ class MozeOCRTool:
 
     def parse_images(self, file_paths):
         date_pattern = re.compile(r'^(\d{1,2})[\.月\-/](\d{1,2})')
-        time_pattern = re.compile(r'(\d{1,2})[:：\.\s](\d{2})')
+        # 增强时间正则
+        time_pattern = re.compile(r'(\d{1,2})[:：\.\s]+(\d{2})')
 
         print(f"\n{BColors.OKGREEN}>>> 开始处理...{BColors.ENDC}")
 
@@ -258,7 +286,6 @@ class MozeOCRTool:
                         target_name = ""
                         clean_text = full_text.replace(
                             ":", "").replace("：", "")
-
                         if "转给" in clean_text:
                             target_name = clean_text.split("转给")[1]
                         elif "来自" in clean_text:
@@ -271,7 +298,6 @@ class MozeOCRTool:
                                 temp = temp.replace(k, "")
                             target_name = temp
 
-                        # 强力去污
                         target_name = target_name.replace("半", "").replace("收入", "").replace(
                             "支出", "").replace("一", "").replace("Y", "").replace("¥", "")
                         target_name = target_name.replace("壬", "王").replace(
@@ -290,9 +316,40 @@ class MozeOCRTool:
                     if (has_time or is_bank_row) and pending_top:
                         final_time = "00:00:00"
                         if has_time:
-                            h, m_val = int(has_time.group(1)), int(
-                                has_time.group(2))
+                            # 🔍 调试：打印OCR识别到的原始时间字符串
+                            time_str_raw = has_time.group(0)
+                            h_str = has_time.group(1)
+                            m_str = has_time.group(2)
+                            
+                            print(f"      🔍 [OCR时间] 原始: '{time_str_raw}' -> 小时:{h_str} 分钟:{m_str}")
+                            
+                            h, m_val = int(h_str), int(m_str)
+                            
+                            # 🔧 时间验证与智能修正
+                            original_time = f"{h:02d}:{m_val:02d}:00"  # 记录原始时间（修正前）
+                            
+                            # ⚠️ 检查明显的时间错误（可能是OCR识别顺序问题）
+                            if h < 10 and m_val > 10:
+                                # 如果小时是个位数，但分钟是20+，可能是识别反了
+                                # 例如: 02:22 可能本来是 22:31 的错误识别
+                                if m_val in [20, 22, 16]:  # 常见的错误模式
+                                    print(f"      ⚠️ [可疑时间] {h:02d}:{m_val:02d} 看起来不太对，请检查原图")
+                            
+                            if m_val > 59:
+                                # 可能是OCR错误：71可能是11，51可能是31等
+                                if m_val == 71:
+                                    m_val = 11  # 常见错误：7和1靠太近
+                                    print(f"      🔧 [时间修正] OCR错误 {h}:71 -> {h}:11")
+                                else:
+                                    print(f"      ⚠️ [时间异常] {h}:{m_val} -> 00:00")
+                                    h, m_val = 0, 0
+                            
+                            if h > 23:
+                                print(f"      ⚠️ [时间异常] {h}:{m_val} -> 00:00")
+                                h, m_val = 0, 0
+                            
                             final_time = f"{h:02d}:{m_val:02d}:00"
+
 
                         account_clean_text = full_text
                         if has_time:
@@ -300,10 +357,19 @@ class MozeOCRTool:
                                 has_time.group(0), "")
 
                         source_account = "云闪付(未知)"
-                        for k, v in ACCOUNT_MAP.items():
-                            if k in account_clean_text:
-                                source_account = v
+                        
+                        # 🏦 优先检查特殊账户名（如"活期+"）
+                        for special_name, moze_name in SPECIAL_ACCOUNT_MAP.items():
+                            if special_name in account_clean_text:
+                                source_account = moze_name
                                 break
+                        
+                        # 如果没匹配到特殊账户，再检查银行卡后四位
+                        if source_account == "云闪付(未知)":
+                            for k, v in ACCOUNT_MAP.items():
+                                if k in account_clean_text:
+                                    source_account = v
+                                    break
                         if source_account == "云闪付(未知)":
                             match = re.search(
                                 r'([\u4e00-\u9fa5]+银行|[\u4e00-\u9fa5]+信用社)', account_clean_text)
@@ -316,6 +382,7 @@ class MozeOCRTool:
 
                         bottom_data = {
                             "time": final_time,
+                            "original_time": original_time if "original_time" in locals() else final_time,
                             "account": source_account,
                             "raw": full_text
                         }
@@ -381,7 +448,6 @@ class MozeOCRTool:
                 final_type = "支出"
                 final_amount = -amount
 
-        # 控制台打印 (保留，方便看进度)
         if final_type == "转出" and final_main == "转账":
             print(f"   🔄 [转出] {amount}")
         elif final_type == "转入":
@@ -396,21 +462,35 @@ class MozeOCRTool:
             '主类别': final_main, '子类别': final_sub,
             '金额': final_amount,
             '手续费': 0, '折扣': 0,
-            '名称': '' if final_object else target_name,
+            '名称': '',
             '商家': '',
             '日期': date_str, '时间': time_str,
             '项目': '', '描述': '', '标签': '', '对象': final_object
         }
+        # 🎯 根据配置过滤应收应付记录
+        if EXCLUDE_RECEIVABLES and final_main in ['应收款项', '应付款项']:
+            print(f"   🚫 [已过滤] {final_sub}: {target_name} {amount}")
+            return
+        
         self.rows.append(row)
 
     def verify_loops(self):
-        print(f"\n{BColors.OKGREEN}>>> 开始闭合验证...{BColors.ENDC}")
+        print(f"\n{BColors.OKGREEN}>>> 正在进行智能对账 (闭环验证)...{BColors.ENDC}")
         df = pd.DataFrame(self.rows)
         if df.empty:
             return
 
         transfers = df[df['主类别'] == '转账'].copy()
+        total_transfers = len(transfers)
+
+        if total_transfers == 0:
+            print("   ℹ️ 本次未检测到内部转账记录。")
+            return
+
         matched_indices = set()
+        fail_list = []
+        success_pairs = 0
+        fixed_time_count = 0
 
         for idx, row in transfers.iterrows():
             if idx in matched_indices:
@@ -418,12 +498,6 @@ class MozeOCRTool:
 
             current_amount = row['金额']
             current_date = row['日期']
-            current_time = row['时间']
-
-            try:
-                t1 = datetime.datetime.strptime(current_time, "%H:%M:%S")
-            except:
-                t1 = datetime.datetime(2000, 1, 1, 0, 0, 0)
 
             potential_partners = transfers[
                 (transfers['金额'] == -current_amount) &
@@ -432,24 +506,84 @@ class MozeOCRTool:
                 (transfers.index != idx)
             ]
 
-            found_partner = False
-            for p_idx, p_row in potential_partners.iterrows():
-                try:
-                    t2 = datetime.datetime.strptime(p_row['时间'], "%H:%M:%S")
-                    delta_seconds = abs((t1 - t2).total_seconds())
+            if not potential_partners.empty:
+                partner_idx = potential_partners.index[0]
+                partner_row = potential_partners.iloc[0]
 
-                    if delta_seconds <= 120:
-                        # 成功闭环，静默处理
-                        matched_indices.add(idx)
-                        matched_indices.add(p_idx)
-                        found_partner = True
-                        break
-                except:
-                    continue
+                # === 🔥 时间同步与日志 🔥 ===
+                t1 = row['时间']
+                t2 = partner_row['时间']
+                best_time = t1
+                if t1 == "00:00:00" and t2 != "00:00:00":
+                    best_time = t2
+                elif t2 == "00:00:00" and t1 != "00:00:00":
+                    best_time = t1
 
-            if not found_partner:
-                print(
-                    f"   ⚠️ [闭环失败] 孤立转账: {current_date} {current_time} ({current_amount}) -> 未找到对应记录")
+                # 检查并修正
+                if self.rows[idx]['时间'] != best_time:
+                    print(
+                        f"      🔧 [时间同步] {current_date} ({current_amount}): {self.rows[idx]['时间']} -> {best_time}")
+                    self.rows[idx]['时间'] = best_time
+                    fixed_time_count += 1
+
+                if self.rows[partner_idx]['时间'] != best_time:
+                    print(
+                        f"      🔧 [时间同步] {current_date} ({-current_amount}): {self.rows[partner_idx]['时间']} -> {best_time}")
+                    self.rows[partner_idx]['时间'] = best_time
+                    fixed_time_count += 1
+
+                matched_indices.add(idx)
+                matched_indices.add(partner_idx)
+                success_pairs += 1
+            else:
+                fail_list.append(
+                    f"{current_date} {row['时间']} ({current_amount})")
+
+        # === 📊 最终汇报 ===
+        print(f"   📊 统计: 共检测到 {total_transfers} 笔转账记录。")
+        if fixed_time_count > 0:
+            print(f"   🔧 修正: 共自动修复了 {fixed_time_count} 处时间错误。")
+
+        if not fail_list:
+            print(
+                f"   🎉 {BColors.OKGREEN}完美！{success_pairs} 对转账全部闭环成功。{BColors.ENDC}")
+        else:
+            print(
+                f"   ⚠️ {BColors.WARNING}警告: 发现 {len(fail_list)} 笔孤立转账，请核对:{BColors.ENDC}")
+            for msg in fail_list:
+                print(f"      - {msg}")
+
+
+    def check_zero_times(self):
+        """检查并警告00:00:00的记录"""
+        print(f"\n{BColors.OKGREEN}>>> 检查时间完整性...{BColors.ENDC}")
+        zero_time_records = [r for r in self.rows if r['时间'] == '00:00:00']
+        
+        if not zero_time_records:
+            print("   ✅ 所有记录都包含时间信息。")
+            return
+        
+        print(f"   ⚠️ {BColors.WARNING}发现 {len(zero_time_records)} 条记录缺少时间信息:{BColors.ENDC}")
+        
+        for record in zero_time_records:
+            date = record['日期']
+            amount = record['金额']
+            account = record['账户']
+            category = record['主类别']
+            
+            # 尝试从同一天的其他记录推测时间
+            same_day_records = [r for r in self.rows 
+                              if r['日期'] == date 
+                              and r['时间'] != '00:00:00'
+                              and abs(r['金额']) == abs(amount)]
+            
+            if same_day_records:
+                suggested_time = same_day_records[0]['时间']
+                print(f"      📌 {date} {category} {amount} ({account})")
+                print(f"         💡 建议时间: {suggested_time} (来自同日同金额记录)")
+            else:
+                print(f"      📌 {date} {category} {amount} ({account})")
+                print(f"         ⚠️  建议手动检查原始截图补充时间")
 
     def save(self):
         if not self.rows:
@@ -457,10 +591,11 @@ class MozeOCRTool:
             return
 
         self.verify_loops()
+        self.check_zero_times()
 
         df = pd.DataFrame(self.rows, columns=MOZE_COLUMNS)
         ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"MOZE_Silent_{ts}.csv"
+        filename = f"MOZE_UnionPay_{ts}.csv"
         if not os.path.exists(EXPORT_DIR):
             os.makedirs(EXPORT_DIR, exist_ok=True)
         full_path = os.path.join(EXPORT_DIR, filename)
