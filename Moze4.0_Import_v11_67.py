@@ -526,9 +526,9 @@ def process_reimbursement(df, sub_col):
         mask_travel = reim_extracted[0].isin(REIM_TRAVEL_KEYS) & mask_reim
         mask_expense = reim_extracted[0].isin(REIM_EXPENSE_KEYS) & mask_reim
         if mask_travel.any():
-            df.loc[mask_travel, '标签'] = '差旅报销'
+            df.loc[mask_travel, '标签'] = '#差旅报销'
         if mask_expense.any():
-            df.loc[mask_expense, '标签'] = '费用报销'
+            df.loc[mask_expense, '标签'] = '#费用报销'
     return df
 
 
