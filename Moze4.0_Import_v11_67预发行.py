@@ -94,7 +94,7 @@ DATA_SOURCE = {
         "纯净水",
         "矿泉水", "农夫山泉", "怡宝", "百岁山", "娃哈哈", "今麦郎"
     ],
-    
+
     # === 食材 ===
     'VEGETABLE': [
         "蔬菜",
@@ -139,7 +139,7 @@ DATA_SOURCE = {
         # --- 通用 ---
         "食材",
         # --- 面点主食 ---
-        "馒头", "发糕","生水饺", "鲜面条", "干面条", "挂面",
+        "馒头", "发糕", "生水饺", "鲜面条", "干面条", "挂面",
         # --- 腊味腌货 ---
         "火腿", "腊肠", "榨菜", "甜酒",
         # --- 调味品/酱料 ---
@@ -149,20 +149,20 @@ DATA_SOURCE = {
         # --- 干货杂粮 ---
         "红豆", "绿豆", "黄豆"
     ],
-    
+
     # === 零食 ===
     'Snack': [
         "零食",
         "切糕", "蛋糕", "面包", "腰果"
     ],
-    
+
     # === 交通 ===
     'CHARGING': ["自助服务-充电桩"],
-    
+
     # === 虚拟 ===
     'SOFTWARE': ["软件", "APP", "应用", "安卓"],
     'SERVER': ["节点", "Dler", "Dogess"],
-    
+
     # === 购物 ===
     'DAILY_NECESSITIES': [
         "日用",
@@ -171,10 +171,10 @@ DATA_SOURCE = {
     ],
     'Clothing_Shoes_Bags': ["袜子", "内裤", "帽子", "手套", "鞋", "T恤", "裤", "外套", "修裤脚"],
     'Furniture_HomeTextiles': ["被子", "空调被", "枕头", "浴巾", "床笠"],
-    
+
     # === 医疗 ===
     'Adult_Products': ["避孕套", "成人润滑剂", "安全套", "Condoms"],
-    
+
     # === 正餐（用于时间推导，不在 INGREDIENT_PRIORITY 中）===
     'MEAL': [
         "正餐",
@@ -194,7 +194,7 @@ DATA_SOURCE = {
         # 6. 通用场景/店名
         "烧烤", "路边摊", "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆"
     ],
-    
+
     # === 其他（不在 INGREDIENT_PRIORITY 中）===
     'Parking_fee': ["WF7023"],
     'REIM_TRAVEL': [
@@ -688,20 +688,24 @@ def process_main(df_in, df_rules, main_col, sub_col):
 
     if '备注' in df.columns:
         memo = df['备注'].astype(str).str.strip()
-        mask_empty_inout = df['收/支'].astype(str).str.strip().isin(['', 'nan', 'NaN'])
+        mask_empty_inout = df['收/支'].astype(
+            str).str.strip().isin(['', 'nan', 'NaN'])
 
         # 借入 → 收入
-        mask_borrow_in = mask_empty_inout & memo.str.contains(r'^借入', na=False, regex=True)
+        mask_borrow_in = mask_empty_inout & memo.str.contains(
+            r'^借入', na=False, regex=True)
         if mask_borrow_in.any():
             df.loc[mask_borrow_in, '收/支'] = '收入'
 
         # 借出/代付/报账/押金 → 支出
-        mask_borrow_out = mask_empty_inout & memo.str.contains(r'^(?:借出|代付|报账|押金)', na=False, regex=True)
+        mask_borrow_out = mask_empty_inout & memo.str.contains(
+            r'^(?:借出|代付|报账|押金)', na=False, regex=True)
         if mask_borrow_out.any():
             df.loc[mask_borrow_out, '收/支'] = '支出'
 
         # 报销关键词 → 支出
-        mask_reim = mask_empty_inout & memo.str.contains(rf'^(?:{reim_pattern})', na=False, regex=True)
+        mask_reim = mask_empty_inout & memo.str.contains(
+            rf'^(?:{reim_pattern})', na=False, regex=True)
         if mask_reim.any():
             df.loc[mask_reim, '收/支'] = '支出'
 
@@ -772,37 +776,39 @@ def process_main(df_in, df_rules, main_col, sub_col):
     df['_is_meal_from_memo'] = False  # 标记是否来自备注的正餐
     if '备注' in df.columns:
         memo_series = df['备注'].astype(str).str.strip().replace('nan', '')
-        
+
         # 特殊关键词映射（不在AUTO_MAP_DICT中但需要支持的）
         special_keywords = {
             '日用': ('支出', '购物', '日常用品'),  # 日用 → 日常用品
         }
-        
+
         # 先处理特殊关键词
         for keyword, (r_type, main_cat, subcat) in special_keywords.items():
             pattern = rf'^{re.escape(keyword)}(.*)$'
             matches = memo_series.str.match(pattern, na=False)
             if matches.any():
-                extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
+                extracted = memo_series[matches].str.replace(
+                    pattern, r'\1', regex=True).str.strip()
                 df.loc[matches, '记录类型'] = r_type
                 df.loc[matches, main_col] = main_cat
                 df.loc[matches, sub_col] = subcat
                 df.loc[matches, '描述'] = extracted
                 memo_series[matches] = ''
-        
+
         # 正餐特殊处理：只设置描述和标记，让后续时间推导决定子类别
         pattern = rf'^正餐(.*)$'
         matches = memo_series.str.match(pattern, na=False)
         if matches.any():
-            extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
+            extracted = memo_series[matches].str.replace(
+                pattern, r'\1', regex=True).str.strip()
             df.loc[matches, '描述'] = extracted
             df.loc[matches, '_is_meal_from_memo'] = True  # 标记需要时间推导
             memo_series[matches] = ''
-        
+
         # 处理标准子类别
         # 应收/应付款项的子类别列表（后面的内容应该是对象而不是描述）
         receivable_payable_subcats = {'借出', '代付', '报账', '押金', '借入'}
-        
+
         for subcat in VALID_SUBCATS:
             if subcat not in AUTO_MAP_DICT:
                 continue
@@ -815,7 +821,8 @@ def process_main(df_in, df_rules, main_col, sub_col):
             if matches.any():
                 r_type, main_cat, proj = AUTO_MAP_DICT[subcat]
                 # 提取后续内容
-                extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
+                extracted = memo_series[matches].str.replace(
+                    pattern, r'\1', regex=True).str.strip()
                 # 设置映射值
                 df.loc[matches, '记录类型'] = r_type
                 df.loc[matches, main_col] = main_cat
@@ -828,7 +835,8 @@ def process_main(df_in, df_rules, main_col, sub_col):
                         if '.' in content:
                             parts = content.split('.', 1)  # 只分割第一个点号
                             df.loc[idx, '对象'] = parts[0].strip()
-                            df.loc[idx, '描述'] = parts[1].strip() if len(parts) > 1 else ""
+                            df.loc[idx, '描述'] = parts[1].strip() if len(
+                                parts) > 1 else ""
                         else:
                             df.loc[idx, '对象'] = content
                             df.loc[idx, '描述'] = ""
@@ -839,7 +847,7 @@ def process_main(df_in, df_rules, main_col, sub_col):
 
     # 执行核心混合逻辑
     df = process_heuristics(df, main_col, sub_col)
-    
+
     # 清理标记列
     if '_is_meal_from_memo' in df.columns:
         df.drop(columns=['_is_meal_from_memo'], inplace=True)
@@ -993,4 +1001,3 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         pass
-
