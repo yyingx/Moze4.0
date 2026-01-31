@@ -207,7 +207,8 @@ INGREDIENT_CONFIG = {
         ],
         'name': '蔬菜',
         'subcategory': '食材',
-        'priority': 4
+        'priority': 4,
+        'exclude_if_match': ['COOKED']
     },
     'RICE': {
         'keywords': ["大米", "五常"],

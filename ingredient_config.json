@@ -1,0 +1,198 @@
+{
+  "_comment": "Moze 导入脚本分类配置 v11.70 - 含 RAW_MAPPING_CONFIG",
+  "_updated": "2026-01-30",
+
+  "_comment_ingredient": "分类配置 - keywords:关键词, name:名称, subcategory:子类别, priority:优先级(越小越先匹配), exclude_if_match:排除条件",
+  "INGREDIENT_CONFIG": {
+    "DRINK": {
+      "keywords": ["饮料", "可乐", "红牛", "奶茶", "东鹏", "果汁", "椰汁", "酸奶", "咖啡", "拿铁", "乐虎", "AD钙奶", "蜜雪冰城"],
+      "name": "饮料",
+      "subcategory": "饮料水果",
+      "priority": 1
+    },
+    "FRUIT": {
+      "keywords": ["水果", "果园", "果蔬", "百果园", "鲜果", "果业", "苹果", "香蕉", "红枣", "大枣", "桃子", "水蜜桃", "樱桃", "黄桃", "香梨", "雪梨", "柑橘", "沃柑", "草莓", "甘蔗", "桔子", "沙糖桔", "葡萄", "西瓜", "柚子", "柠檬", "橙子", "菠萝", "榴莲", "山竹", "蓝莓", "荔枝", "龙眼", "哈密瓜", "椰子", "柿子", "杨梅", "李子", "芒果", "猕猴桃", "火龙果", "百香果", "莲雾", "车厘子", "菠萝蜜", "桑葚", "枇杷", "杨桃", "无花果", "圣女果", "小番茄", "姑娘果", "西梅", "青枣", "冬枣", "黑布林", "人参果", "丑八怪", "耙耙柑"],
+      "name": "水果",
+      "subcategory": "饮料水果",
+      "priority": 2
+    },
+    "WATER": {
+      "keywords": ["纯净水", "矿泉水", "农夫山泉", "怡宝", "百岁山", "娃哈哈", "今麦郎"],
+      "name": "",
+      "subcategory": "纯净水",
+      "priority": 3
+    },
+    "VEGETABLE": {
+      "keywords": ["蔬菜", "白菜", "菠菜", "上海青", "油麦菜", "生菜", "娃娃菜", "空心菜", "苋菜", "菜芯", "韭菜", "香菜", "芹菜", "荠菜", "芥蓝", "土豆", "胡萝卜", "萝卜", "白萝卜", "青萝卜", "红薯", "紫薯", "山药", "芋头", "莲藕", "藕", "洋葱", "大蒜", "生姜", "竹笋", "芦笋", "茭白", "西红柿", "茄子", "黄瓜", "西葫芦", "南瓜", "冬瓜", "苦瓜", "丝瓜", "青椒", "彩椒", "尖椒", "秋葵", "玉米", "四季豆", "豇豆", "扁豆", "荷兰豆", "毛豆", "豌豆", "蚕豆", "刀豆", "香菇", "金针菇", "平菇", "杏鲍菇", "口蘑", "木耳", "银耳", "茶树菇", "猴头菇", "大葱", "小葱", "蒜苗", "蒜苔"],
+      "name": "蔬菜",
+      "subcategory": "食材",
+      "priority": 4,
+      "exclude_if_match": ["COOKED"]
+    },
+    "RICE": {
+      "keywords": ["大米", "五常"],
+      "name": "大米",
+      "subcategory": "食材",
+      "priority": 5
+    },
+    "BEAN_PRODUCT": {
+      "keywords": ["豆腐", "豆皮", "腐竹", "豆干", "豆腐泡", "千张", "豆卷", "腐皮", "油豆皮", "内脂豆腐", "老豆腐", "嫩豆腐", "冻豆腐", "响铃卷", "素鸡"],
+      "name": "豆制品",
+      "subcategory": "食材",
+      "priority": 6
+    },
+    "PORK": {
+      "keywords": ["猪肉", "扇子骨", "板油", "五花肉", "梅花肉", "瘦肉", "猪蹄膀", "蹄膀", "排骨", "脊骨", "五花", "前蹄", "大肠", "筒子骨", "棒骨", "猪油", "猪蹄", "荤油", "鲜肉"],
+      "name": "猪肉",
+      "subcategory": "食材",
+      "priority": 7,
+      "exclude_if_match": ["COOKED"]
+    },
+    "BEEF_MUTTON": {
+      "keywords": ["牛肉", "牛腩", "牛排", "牛柳", "牛肠", "牛杂", "牛腱", "肥牛", "羊肉", "羊排", "羊腿"],
+      "name": "牛羊肉",
+      "subcategory": "食材",
+      "priority": 8,
+      "exclude_if_match": ["COOKED"]
+    },
+    "POULTRY": {
+      "keywords": ["三黄鸡", "鸡腿", "鸡翅", "鸡胸肉", "老母鸡", "乌鸡", "鸭肉", "鸭腿", "鸭翅", "鸭架", "老鸭"],
+      "name": "禽肉",
+      "subcategory": "食材",
+      "priority": 9,
+      "exclude_if_match": ["COOKED"]
+    },
+    "Eggs": {
+      "keywords": ["鸡蛋", "土鸡蛋", "生咸鸭蛋", "皮蛋"],
+      "name": "蛋及蛋制品",
+      "subcategory": "食材",
+      "priority": 10
+    },
+    "SEAFOOD": {
+      "keywords": ["鱼", "虾", "蟹", "贝", "带鱼", "黄鱼", "鲈鱼", "鲫鱼", "草鱼", "基围虾", "皮皮虾", "大闸蟹", "生蚝", "鱿鱼", "章鱼", "海带", "紫菜"],
+      "name": "海鲜水产",
+      "subcategory": "食材",
+      "priority": 11,
+      "exclude_if_match": ["COOKED"]
+    },
+    "COOKED": {
+      "keywords": ["熟食", "水煮花生", "花生米", "熟花生", "蚕豆", "毛豆", "藕夹", "茄盒", "锅包肉", "猪头肉", "卤菜", "凉菜", "烧鸡", "烤鸭", "酱牛肉", "熏鱼", "炸带鱼", "炸鱿鱼", "肉丸", "墨鱼丸", "牛肉丸", "鱼丸", "虾滑", "贡丸", "鱿鱼圈", "糍粑", "熟咸鸭蛋", "熟肉肠", "糯米制品", "铁板鸭"],
+      "name": "熟食",
+      "subcategory": "食材",
+      "priority": 12
+    },
+    "INGREDIENTS": {
+      "keywords": ["食材", "馒头", "发糕", "生水饺", "鲜面条", "干面条", "挂面", "火腿", "腊肠", "榨菜", "甜酒", "老干妈", "杂酱", "酱料", "炸酱", "酱豆", "辣椒酱", "白砂糖", "食用盐", "生抽", "老抽", "耗油", "料酒", "胡椒粉", "辣椒粉", "蒸肉粉", "火锅底料", "红豆", "绿豆", "黄豆"],
+      "name": "",
+      "subcategory": "食材",
+      "priority": 13
+    },
+    "Snack": {
+      "keywords": ["零食", "切糕", "蛋糕", "面包", "腰果"],
+      "name": "",
+      "subcategory": "零食",
+      "priority": 14
+    },
+    "CHARGING": {
+      "keywords": ["自助服务-充电桩"],
+      "name": "充电",
+      "subcategory": "加油充电",
+      "priority": 15
+    },
+    "SOFTWARE": {
+      "keywords": ["软件", "APP", "应用", "安卓"],
+      "name": "",
+      "subcategory": "Software",
+      "priority": 16
+    },
+    "SERVER": {
+      "keywords": ["节点", "Dler", "Dogess"],
+      "name": "节点",
+      "subcategory": "虚拟其他",
+      "priority": 17
+    },
+    "DAILY_NECESSITIES": {
+      "keywords": ["日用", "抽纸", "卷纸", "厨房纸", "垃圾袋", "保鲜袋", "保鲜膜", "洗衣液", "洗洁精", "牙膏", "洗发水", "一次性手套", "一次性杯", "棉签", "纸巾"],
+      "name": "",
+      "subcategory": "日常用品",
+      "priority": 18
+    },
+    "Clothing_Shoes_Bags": {
+      "keywords": ["袜子", "内裤", "帽子", "手套", "鞋", "T恤", "裤", "外套", "修裤脚"],
+      "name": "",
+      "subcategory": "服饰鞋包",
+      "priority": 19
+    },
+    "Furniture_HomeTextiles": {
+      "keywords": ["被子", "空调被", "枕头", "浴巾", "床笠"],
+      "name": "",
+      "subcategory": "家具家纺",
+      "priority": 20
+    },
+    "Adult_Products": {
+      "keywords": ["避孕套", "成人润滑剂", "安全套", "Condoms"],
+      "name": "Condoms",
+      "subcategory": "保健用品",
+      "priority": 21
+    }
+  },
+
+  "_comment_meal": "正餐关键词 - 匹配后根据时间推导早餐/午餐/晚餐/夜宵",
+  "MEAL_KEYWORDS": [
+    "正餐", "东苑一层", "东苑二层", "西区食堂", "外勤", "斯迪姆幼儿园-柏思思",
+    "三镇民生", "永和四喜", "老乡鸡", "黄蜀郎", "麦香园", "丝路",
+    "兰州", "沙县", "长沙臭豆腐", "重庆小面",
+    "麻辣香锅", "麻辣烫", "鸡公煲", "猪脚饭", "卤肉饭", "盖浇饭", "炒饭", "快餐", "小碗菜",
+    "热干面", "太和板面", "板面", "油泼面", "牛肉面", "刀削面", "牛杂粉", "肠粉", "牛肉汤", "汤粉",
+    "水煎包", "小笼包", "汽水包", "煎豆折", "鸡蛋饼", "包粑",
+    "煎包", "煎饼", "烧饼", "锅盔", "肉夹馍", "馕",
+    "水饺", "蒸饺", "混沌", "馄饨", "包子", "小面",
+    "烧烤", "路边摊", "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆"
+  ],
+
+  "_comment_parking": "停车费关键词 - 车牌号匹配",
+  "PARKING_KEYWORDS": ["WF7023"],
+
+  "_comment_time": "餐食时间段 [起始小时, 结束小时)",
+  "MEAL_TIME_RANGES": {
+    "早餐": [6, 11],
+    "午餐": [11, 16],
+    "晚餐": [16, 21]
+  },
+
+  "_comment_mapping": "子类别映射规则 - subcategories → (record_type, main_category, project)",
+  "RAW_MAPPING_CONFIG": [
+    {"record_type": "支出", "main_category": "饮食", "project": "食", "subcategories": ["早餐", "午餐", "晚餐", "夜宵", "正餐", "食材", "饮料水果", "纯净水", "零食"]},
+    {"record_type": "支出", "main_category": "购物", "project": "日用&家用", "subcategories": ["服饰鞋包", "日常用品", "大件", "共享租赁", "摄影文印", "数码电器", "家具家纺"]},
+    {"record_type": "支出", "main_category": "交通", "project": "通信&交通", "subcategories": ["加油充电", "公共交通", "共享交通", "火车", "出租车", "汽车", "轮渡", "机票", "交通违章", "维修保养", "停车费"]},
+    {"record_type": "支出", "main_category": "居家", "project": "住", "subcategories": ["房租", "水费", "电费", "物业费", "宽带费"]},
+    {"record_type": "支出", "main_category": "居家", "project": "食", "subcategories": ["液化气费"]},
+    {"record_type": "支出", "main_category": "居家", "project": "日用&家用", "subcategories": ["快递邮政", "理发", "洗衣费"]},
+    {"record_type": "支出", "main_category": "居家", "project": "通信&交通", "subcategories": ["电话费"]},
+    {"record_type": "支出", "main_category": "虚拟", "project": "娱乐", "subcategories": ["App", "订阅", "虚拟其他", "影音"]},
+    {"record_type": "支出", "main_category": "虚拟", "project": "学习", "subcategories": ["Software"]},
+    {"record_type": "支出", "main_category": "娱乐", "project": "娱乐", "subcategories": ["电影", "聚会", "旅游度假", "卡拉OK", "麻将棋牌", "网游电玩", "娱乐其他"]},
+    {"record_type": "支出", "main_category": "娱乐", "project": "Hormones", "subcategories": ["休闲保健", "住宿"]},
+    {"record_type": "支出", "main_category": "医疗", "project": "医疗", "subcategories": ["医疗用品", "牙齿保健", "药品", "门诊", "打针", "住院", "手术", "体检"]},
+    {"record_type": "支出", "main_category": "医疗", "project": "Hormones", "subcategories": ["保健用品"]},
+    {"record_type": "支出", "main_category": "学习", "project": "学习", "subcategories": ["图书", "教材", "证书", "探索", "文具", "资料文献"]},
+    {"record_type": "支出", "main_category": "个人", "project": "Hormones", "subcategories": ["The Girls"]},
+    {"record_type": "支出", "main_category": "个人", "project": "工作", "subcategories": ["个人其他", "保险"]},
+    {"record_type": "支出", "main_category": "个人", "project": "兼职", "subcategories": ["生意", "投资亏损"]},
+    {"record_type": "支出", "main_category": "个人", "project": "理财", "subcategories": ["利息"]},
+    {"record_type": "支出", "main_category": "个人", "project": "额外非必要开销", "subcategories": ["社交人情", "给予", "孝敬", "礼金红包"]},
+    {"record_type": "收入", "main_category": "收入", "project": "兼职", "subcategories": ["外卖跑腿(CNY)", "其他收入"]},
+    {"record_type": "收入", "main_category": "收入", "project": "工作", "subcategories": ["薪资", "福利补贴", "年终奖"]},
+    {"record_type": "收入", "main_category": "收入", "project": "理财", "subcategories": ["利息收入", "投资盈利"]},
+    {"record_type": "收入", "main_category": "收入", "project": "", "subcategories": ["收红包", "二手折旧"]},
+    {"record_type": "转出", "main_category": "转账", "project": "", "subcategories": ["转账", "提现", "取出", "存款", "兑换", "充值"]},
+    {"record_type": "转入", "main_category": "转账", "project": "", "subcategories": ["转账", "提现", "取出", "存款", "兑换", "充值"]},
+    {"record_type": "转出", "main_category": "信用卡还款", "project": "", "subcategories": ["信用卡还款"]},
+    {"record_type": "转入", "main_category": "信用卡还款", "project": "", "subcategories": ["信用卡还款"]},
+    {"record_type": "应收款项", "main_category": "应收款项", "project": "", "subcategories": ["报账", "借出", "代付", "押金"]},
+    {"record_type": "应付款项", "main_category": "应付款项", "project": "", "subcategories": ["借入"]},
+    {"record_type": "手续费", "main_category": "手续费", "project": "", "subcategories": ["手续费"]},
+    {"record_type": "折扣", "main_category": "折扣", "project": "", "subcategories": ["折扣"]},
+    {"record_type": "返利回馈", "main_category": "返利回馈", "project": "返利", "subcategories": ["返利回馈"]}
+  ]
+}

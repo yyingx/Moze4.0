@@ -1,31 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Moze 导入脚本 v11.69 (Stable Release)
+Moze 导入脚本 v11.70 (JSON Config)
 Created on Sun Jan 05 2026
-Optimized: Mon Jan 27 2026
-Merged: Thu Jan 30 2026
+Optimized: Thu Jan 30 2026
 
 @author: TZY_YX
 
-CHANGELOG (v11.69):
-[重构] 统一 INGREDIENT_CONFIG 数据结构，合并 DATA_SOURCE + INGREDIENT_PRIORITY
-[重构] 使用 exclude_if_match 配置排除规则，替代硬编码
-[优化] 使用 logging 模块替代 print，带时间戳和级别
-[优化] 动态检测 CSV/XLSX header 行数，适应格式变化
-[优化] 向量化点号分隔处理，提升性能
-[优化] 异常处理细化，捕获具体异常类型
-[修复] 删除 pd.options.mode.chained_assignment = None（危险设置）
-[修复] 添加 df.copy() 避免 SettingWithCopyWarning
-[新增] 可选 tqdm 进度条支持
+CHANGELOG (v11.70):
+[新增] 分离 INGREDIENT_CONFIG 到 JSON 文件，便于维护
+[新增] 分离 RAW_MAPPING_CONFIG 到 JSON 文件
+[新增] 支持从 ingredient_config.json 加载分类配置
+[保留] v11.69 所有功能
 
-基于 v11.67 的功能:
-[保留] 点号分隔格式 → 备注"借入谢辉.钉子"自动解析为 对象=谢辉, 描述=钉子
-[保留] 自动推断收/支 → 手动添加行时可不填"收/支"列
-[保留] 报销关键词识别 → 材料费/燃油费/物流运输等
+配置文件: ingredient_config.json
+- INGREDIENT_CONFIG: 分类关键词配置
+- MEAL_KEYWORDS: 正餐关键词
+- PARKING_KEYWORDS: 停车费关键词
+- MEAL_TIME_RANGES: 餐食时间段
+- RAW_MAPPING_CONFIG: 子类别到记录类型/主类别/项目的映射
 """
 
 # === 版本信息 ===
-__version__ = '11.69'
+__version__ = '11.70'
 __author__ = 'TZY_YX'
 __updated__ = '2026-01-30'
 
@@ -39,6 +35,7 @@ import traceback
 import re
 import datetime
 import logging
+import json
 
 # === 日志配置 ===
 logging.basicConfig(
@@ -76,28 +73,19 @@ class BColors:
 CURRENT_DIR = Path(__file__).parent if '__file__' in locals() else Path.cwd()
 RULE_BOOK_PATH = CURRENT_DIR / "Moze Dict.xlsx"
 TARGET_DIR = CURRENT_DIR / "Moze4.0_Import"
+INGREDIENT_CONFIG_PATH = CURRENT_DIR / "ingredient_config.json"
 
 # --- 文件读取配置 ---
-ALIPAY_HEADER_RANGE = (20, 30)  # 支付宝 header 搜索范围
-WECHAT_HEADER_RANGE = (14, 20)  # 微信 header 搜索范围
+ALIPAY_HEADER_RANGE = (20, 30)
+WECHAT_HEADER_RANGE = (14, 20)
 ALIPAY_ENCODING = 'gb18030'
-HEADER_KEYWORDS = ['交易时间', '付款时间', '交易创建时间']  # 用于检测 header
-
-# --- 时间段配置 ---
-MEAL_TIME_RANGES = {
-    '早餐': (6, 11),
-    '午餐': (11, 16),
-    '晚餐': (16, 21),
-    # 夜宵是默认值（21:00-6:00）
-}
+HEADER_KEYWORDS = ['交易时间', '付款时间', '交易创建时间']
 
 # --- 核心配置 ---
 CONFIG = {
-    # 转账对方识别
     'TRANSFER_TARGET_1': '肖恩',
     'TRANSFER_TARGET_2': '工商银行(9579)',
     'TRANSFER_TARGET_SNOWBALL': '上海雪球数智科技有限公司',
-    # 转账账户映射
     'ACCOUNT_LINGQIAN_2': '零钱2',
     'ACCOUNT_LINGQIAN_3': '零钱3',
     'ACCOUNT_ICBC': '工商银行',
@@ -136,7 +124,7 @@ SUBCAT_KEYWORDS = {
     '夜宵': '夜宵',
 }
 
-# 名称关键词映射 (名称 → (子类别, 名称))
+# 名称关键词映射
 NAME_KEYWORDS = {
     '水果': ('饮料水果', '水果'),
     '饮料': ('饮料水果', '饮料'),
@@ -150,247 +138,58 @@ NAME_KEYWORDS = {
     '大米': ('食材', '大米'),
 }
 
+
 # ==========================================
-#    [统一] INGREDIENT_CONFIG 数据结构
+#    [JSON] 从配置文件加载
 # ==========================================
-# 合并原有的 DATA_SOURCE 和 INGREDIENT_PRIORITY
-# 格式: key -> {keywords, name, subcategory, priority, exclude_if_match(可选)}
 
-INGREDIENT_CONFIG = {
-    # === 饮料水果 ===
-    'DRINK': {
-        'keywords': [
-            "饮料", "可乐", "红牛", "奶茶", "东鹏", "果汁", "椰汁", "酸奶",
-            "咖啡", "拿铁", "乐虎", "AD钙奶", "蜜雪冰城"
-        ],
-        'name': '饮料',
-        'subcategory': '饮料水果',
-        'priority': 1
-    },
-    'FRUIT': {
-        'keywords': [
-            "水果", "果园", "果蔬", "百果园", "鲜果", "果业", "苹果", "香蕉",
-            "红枣", "大枣", "桃子", "水蜜桃", "樱桃", "黄桃", "香梨", "雪梨",
-            "柑橘", "沃柑", "草莓", "甘蔗", "桔子", "沙糖桔", "葡萄", "西瓜",
-            "柚子", "柠檬", "橙子", "菠萝", "榴莲", "山竹", "蓝莓", "荔枝",
-            "龙眼", "哈密瓜", "椰子", "柿子", "杨梅", "李子", "芒果", "猕猴桃",
-            "火龙果", "百香果", "莲雾", "车厘子", "菠萝蜜", "桑葚", "枇杷",
-            "杨桃", "无花果", "圣女果", "小番茄", "姑娘果", "西梅", "青枣",
-            "冬枣", "黑布林", "人参果", "丑八怪", "耙耙柑"
-        ],
-        'name': '水果',
-        'subcategory': '饮料水果',
-        'priority': 2
-    },
-    'WATER': {
-        'keywords': ["纯净水", "矿泉水", "农夫山泉", "怡宝", "百岁山", "娃哈哈", "今麦郎"],
-        'name': '',
-        'subcategory': '纯净水',
-        'priority': 3
-    },
+def load_ingredient_config(config_path: Path):
+    """从 JSON 文件加载分类配置"""
+    if not config_path.exists():
+        logger.error(f"配置文件不存在: {config_path}")
+        return None, None, None, None, None
 
-    # === 食材 ===
-    'VEGETABLE': {
-        'keywords': [
-            "蔬菜",
-            # 叶菜类
-            "白菜", "菠菜", "上海青", "油麦菜", "生菜", "娃娃菜", "空心菜", "苋菜", "菜芯",
-            "韭菜", "香菜", "芹菜", "荠菜", "芥蓝",
-            # 根茎类
-            "土豆", "胡萝卜", "萝卜", "白萝卜", "青萝卜", "红薯", "紫薯", "山药", "芋头",
-            "莲藕", "藕", "洋葱", "大蒜", "生姜", "竹笋", "芦笋", "茭白",
-            # 茄果/瓜果类
-            "西红柿", "茄子", "黄瓜", "西葫芦", "南瓜", "冬瓜", "苦瓜", "丝瓜",
-            "青椒", "彩椒", "尖椒", "秋葵", "玉米",
-            # 豆类
-            "四季豆", "豇豆", "扁豆", "荷兰豆", "毛豆", "豌豆", "蚕豆", "刀豆",
-            # 菌菇类
-            "香菇", "金针菇", "平菇", "杏鲍菇", "口蘑", "木耳", "银耳", "茶树菇", "猴头菇",
-            # 葱姜蒜
-            "大葱", "小葱", "蒜苗", "蒜苔"
-        ],
-        'name': '蔬菜',
-        'subcategory': '食材',
-        'priority': 4,
-        'exclude_if_match': ['COOKED']
-    },
-    'RICE': {
-        'keywords': ["大米", "五常"],
-        'name': '大米',
-        'subcategory': '食材',
-        'priority': 5
-    },
-    'BEAN_PRODUCT': {
-        'keywords': [
-            "豆腐", "豆皮", "腐竹", "豆干", "豆腐泡", "千张", "豆卷", "腐皮",
-            "油豆皮", "内脂豆腐", "老豆腐", "嫩豆腐", "冻豆腐", "响铃卷", "素鸡"
-        ],
-        'name': '豆制品',
-        'subcategory': '食材',
-        'priority': 6
-    },
-    'PORK': {
-        'keywords': [
-            "猪肉", "扇子骨", "板油", "五花肉", "梅花肉", "瘦肉", "猪蹄膀", "蹄膀",
-            "排骨", "脊骨", "五花", "前蹄", "大肠", "筒子骨", "棒骨", "猪油",
-            "猪蹄", "荤油", "鲜肉"
-        ],
-        'name': '猪肉',
-        'subcategory': '食材',
-        'priority': 7,
-        'exclude_if_match': ['COOKED']
-    },
-    'BEEF_MUTTON': {
-        'keywords': [
-            "牛肉", "牛腩", "牛排", "牛柳", "牛肠", "牛杂", "牛腱", "肥牛",
-            "羊肉", "羊排", "羊腿"
-        ],
-        'name': '牛羊肉',
-        'subcategory': '食材',
-        'priority': 8,
-        'exclude_if_match': ['COOKED']
-    },
-    'POULTRY': {
-        'keywords': [
-            "三黄鸡", "鸡腿", "鸡翅", "鸡胸肉", "老母鸡", "乌鸡",
-            "鸭肉", "鸭腿", "鸭翅", "鸭架", "老鸭"
-        ],
-        'name': '禽肉',
-        'subcategory': '食材',
-        'priority': 9,
-        'exclude_if_match': ['COOKED']
-    },
-    'Eggs': {
-        'keywords': ["鸡蛋", "土鸡蛋", "生咸鸭蛋", "皮蛋"],
-        'name': '蛋及蛋制品',
-        'subcategory': '食材',
-        'priority': 10
-    },
-    'SEAFOOD': {
-        'keywords': [
-            "鱼", "虾", "蟹", "贝", "带鱼", "黄鱼", "鲈鱼", "鲫鱼", "草鱼",
-            "基围虾", "皮皮虾", "大闸蟹", "生蚝", "鱿鱼", "章鱼", "海带", "紫菜"
-        ],
-        'name': '海鲜水产',
-        'subcategory': '食材',
-        'priority': 11,
-        'exclude_if_match': ['COOKED']
-    },
-    'COOKED': {
-        'keywords': [
-            "熟食", "水煮花生", "花生米", "熟花生", "蚕豆", "毛豆", "藕夹", "茄盒",
-            "锅包肉", "猪头肉", "卤菜", "凉菜", "烧鸡", "烤鸭", "酱牛肉", "熏鱼",
-            "炸带鱼", "炸鱿鱼", "肉丸", "墨鱼丸", "牛肉丸", "鱼丸", "虾滑", "贡丸",
-            "鱿鱼圈", "糍粑", "熟咸鸭蛋", "熟肉肠", "糯米制品", "铁板鸭"
-        ],
-        'name': '熟食',
-        'subcategory': '食材',
-        'priority': 12
-    },
-    'INGREDIENTS': {
-        'keywords': [
-            "食材",
-            # 面点主食
-            "馒头", "发糕", "生水饺", "鲜面条", "干面条", "挂面",
-            # 腊味腌货
-            "火腿", "腊肠", "榨菜", "甜酒",
-            # 调味品/酱料
-            "老干妈", "杂酱", "酱料", "炸酱", "酱豆", "辣椒酱",
-            "白砂糖", "食用盐", "生抽", "老抽", "耗油", "料酒",
-            "胡椒粉", "辣椒粉", "蒸肉粉", "火锅底料",
-            # 干货杂粮
-            "红豆", "绿豆", "黄豆"
-        ],
-        'name': '',
-        'subcategory': '食材',
-        'priority': 13
-    },
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
 
-    # === 零食 ===
-    'Snack': {
-        'keywords': ["零食", "切糕", "蛋糕", "面包", "腰果"],
-        'name': '',
-        'subcategory': '零食',
-        'priority': 14
-    },
+        ingredient_config = data.get('INGREDIENT_CONFIG', {})
+        meal_keywords = data.get('MEAL_KEYWORDS', [])
+        parking_keywords = data.get('PARKING_KEYWORDS', [])
+        meal_time_ranges = data.get('MEAL_TIME_RANGES', {})
+        raw_mapping_list = data.get('RAW_MAPPING_CONFIG', [])
 
-    # === 交通 ===
-    'CHARGING': {
-        'keywords': ["自助服务-充电桩"],
-        'name': '充电',
-        'subcategory': '加油充电',
-        'priority': 15
-    },
+        # 转换 MEAL_TIME_RANGES 的列表为元组
+        meal_time_ranges = {k: tuple(v) for k, v in meal_time_ranges.items()}
 
-    # === 虚拟 ===
-    'SOFTWARE': {
-        'keywords': ["软件", "APP", "应用", "安卓"],
-        'name': '',
-        'subcategory': 'Software',
-        'priority': 16
-    },
-    'SERVER': {
-        'keywords': ["节点", "Dler", "Dogess"],
-        'name': '节点',
-        'subcategory': '虚拟其他',
-        'priority': 17
-    },
+        # 转换 RAW_MAPPING_CONFIG 从数组格式到字典格式
+        raw_mapping_config = {}
+        for item in raw_mapping_list:
+            key = (item['record_type'], item['main_category'], item['project'])
+            raw_mapping_config[key] = item['subcategories']
 
-    # === 购物 ===
-    'DAILY_NECESSITIES': {
-        'keywords': [
-            "日用", "抽纸", "卷纸", "厨房纸", "垃圾袋", "保鲜袋", "保鲜膜",
-            "洗衣液", "洗洁精", "牙膏", "洗发水", "一次性手套", "一次性杯",
-            "棉签", "纸巾"
-        ],
-        'name': '',
-        'subcategory': '日常用品',
-        'priority': 18
-    },
-    'Clothing_Shoes_Bags': {
-        'keywords': ["袜子", "内裤", "帽子", "手套", "鞋", "T恤", "裤", "外套", "修裤脚"],
-        'name': '',
-        'subcategory': '服饰鞋包',
-        'priority': 19
-    },
-    'Furniture_HomeTextiles': {
-        'keywords': ["被子", "空调被", "枕头", "浴巾", "床笠"],
-        'name': '',
-        'subcategory': '家具家纺',
-        'priority': 20
-    },
+        logger.info(f"已加载配置: {len(ingredient_config)} 个分类, {len(meal_keywords)} 个正餐关键词, {len(raw_mapping_config)} 个映射规则")
+        return ingredient_config, meal_keywords, parking_keywords, meal_time_ranges, raw_mapping_config
 
-    # === 医疗 ===
-    'Adult_Products': {
-        'keywords': ["避孕套", "成人润滑剂", "安全套", "Condoms"],
-        'name': 'Condoms',
-        'subcategory': '保健用品',
-        'priority': 21
-    },
-}
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON 解析错误: {e}")
+    except Exception as e:
+        logger.error(f"加载配置失败: {type(e).__name__} - {e}")
 
-# 正餐关键词（用于时间推导，不在分类配置中）
-MEAL_KEYWORDS = [
-    "正餐",
-    # 地点/校区
-    "东苑一层", "东苑二层", "西区食堂", "外勤", "斯迪姆幼儿园-柏思思",
-    # 连锁品牌
-    "三镇民生", "永和四喜", "老乡鸡", "黄蜀郎", "麦香园", "丝路",
-    # 风味/地域
-    "兰州", "沙县", "长沙臭豆腐", "重庆小面",
-    # 具体餐品 - 饭/面/粉/锅
-    "麻辣香锅", "麻辣烫", "鸡公煲", "猪脚饭", "卤肉饭", "盖浇饭", "炒饭", "快餐", "小碗菜",
-    "热干面", "太和板面", "板面", "油泼面", "牛肉面", "刀削面", "牛杂粉", "肠粉", "牛肉汤", "汤粉",
-    # 面点/早餐/小吃
-    "水煎包", "小笼包", "汽水包", "煎豆折", "鸡蛋饼", "包粑",
-    "煎包", "煎饼", "烧饼", "锅盔", "肉夹馍", "馕",
-    "水饺", "蒸饺", "混沌", "馄饨", "包子", "小面",
-    # 通用场景/店名
-    "烧烤", "路边摊", "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆"
-]
+    return None, None, None, None, None
 
-# 特殊关键词
-PARKING_KEYWORDS = ["WF7023"]
+
+# 加载配置
+INGREDIENT_CONFIG, MEAL_KEYWORDS, PARKING_KEYWORDS, MEAL_TIME_RANGES, RAW_MAPPING_CONFIG = load_ingredient_config(INGREDIENT_CONFIG_PATH)
+
+# 如果加载失败，使用默认空配置
+if INGREDIENT_CONFIG is None:
+    logger.warning("使用空配置，分类功能将不可用")
+    INGREDIENT_CONFIG = {}
+    MEAL_KEYWORDS = []
+    PARKING_KEYWORDS = []
+    MEAL_TIME_RANGES = {'早餐': (6, 11), '午餐': (11, 16), '晚餐': (16, 21)}
+    RAW_MAPPING_CONFIG = {}
 
 
 # ==========================================
@@ -402,16 +201,18 @@ def build_data_structures():
     data_source = {}
     patterns = {}
 
-    # 从 INGREDIENT_CONFIG 构建
     for key, config in INGREDIENT_CONFIG.items():
         data_source[key] = config['keywords']
         patterns[key] = re.compile(r"(?:" + "|".join(map(re.escape, config['keywords'])) + ")")
 
     # 添加正餐和停车费
-    data_source['MEAL'] = MEAL_KEYWORDS
-    patterns['MEAL'] = re.compile(r"(?:" + "|".join(map(re.escape, MEAL_KEYWORDS)) + ")")
-    data_source['Parking_fee'] = PARKING_KEYWORDS
-    patterns['Parking_fee'] = re.compile(r"(?:" + "|".join(map(re.escape, PARKING_KEYWORDS)) + ")")
+    if MEAL_KEYWORDS:
+        data_source['MEAL'] = MEAL_KEYWORDS
+        patterns['MEAL'] = re.compile(r"(?:" + "|".join(map(re.escape, MEAL_KEYWORDS)) + ")")
+
+    if PARKING_KEYWORDS:
+        data_source['Parking_fee'] = PARKING_KEYWORDS
+        patterns['Parking_fee'] = re.compile(r"(?:" + "|".join(map(re.escape, PARKING_KEYWORDS)) + ")")
 
     # 添加报销关键词
     data_source['REIM_TRAVEL'] = REIM_TRAVEL_KEYS
@@ -429,43 +230,8 @@ SORTED_INGREDIENT_CONFIG = sorted(
     key=lambda x: x[1].get('priority', 999)
 )
 
-RAW_MAPPING_CONFIG = {
-    ('支出', '饮食', '食'): ['早餐', '午餐', '晚餐', '夜宵', '正餐', '食材', '饮料水果', '纯净水', '零食'],
-    ('支出', '购物', '日用&家用'): ['服饰鞋包', '日常用品', '大件', '共享租赁', '摄影文印', '数码电器', '家具家纺'],
-    ('支出', '交通', '通信&交通'): ['加油充电', '公共交通', '共享交通', '火车', '出租车', '汽车', '轮渡', '机票', '交通违章', '维修保养', '停车费'],
-    ('支出', '居家', '住'): ['房租', '水费', '电费', '物业费', '宽带费'],
-    ('支出', '居家', '食'): ['液化气费'],
-    ('支出', '居家', '日用&家用'): ['快递邮政', '理发', '洗衣费'],
-    ('支出', '居家', '通信&交通'): ['电话费'],
-    ('支出', '虚拟', '娱乐'): ['App', '订阅', '虚拟其他', '影音'],
-    ('支出', '虚拟', '学习'): ['Software'],
-    ('支出', '娱乐', '娱乐'): ['电影', '聚会', '旅游度假', '卡拉OK', '麻将棋牌', '网游电玩', '娱乐其他'],
-    ('支出', '娱乐', 'Hormones'): ['休闲保健', '住宿'],
-    ('支出', '医疗', '医疗'): ['医疗用品', '牙齿保健', '药品', '门诊', '打针', '住院', '手术', '体检'],
-    ('支出', '医疗', 'Hormones'): ['保健用品'],
-    ('支出', '学习', '学习'): ['图书', '教材', '证书', '探索', '文具', '资料文献'],
-    ('支出', '个人', 'Hormones'): ['The Girls'],
-    ('支出', '个人', '工作'): ['个人其他', '保险'],
-    ('支出', '个人', '兼职'): ['生意', '投资亏损'],
-    ('支出', '个人', '理财'): ['利息'],
-    ('支出', '个人', '额外非必要开销'): ['社交人情', '给予', '孝敬', '礼金红包'],
-    ('收入', '收入', '兼职'): ['外卖跑腿(CNY)', '其他收入'],
-    ('收入', '收入', '工作'): ['薪资', '福利补贴', '年终奖'],
-    ('收入', '收入', '理财'): ['利息收入', '投资盈利'],
-    ('收入', '收入', ''): ['收红包', '二手折旧'],
-    ('转出', '转账', ''): ['转账', '提现', '取出', '存款', '兑换', '充值'],
-    ('转入', '转账', ''): ['转账', '提现', '取出', '存款', '兑换', '充值'],
-    ('转出', '信用卡还款', ''): ['信用卡还款'],
-    ('转入', '信用卡还款', ''): ['信用卡还款'],
-    ('应收款项', '应收款项', ''): ['报账', '借出', '代付', '押金'],
-    ('应付款项', '应付款项', ''): ['借入'],
-    ('手续费', '手续费', ''): ['手续费'],
-    ('折扣', '折扣', ''): ['折扣'],
-    ('返利回馈', '返利回馈', '返利'): ['返利回馈']
-}
+# RAW_MAPPING_CONFIG 从 JSON 配置文件加载
 
-PATTERNS = {k: re.compile(r"(?:" + "|".join(map(re.escape, v)) + ")")
-            for k, v in DATA_SOURCE.items()}
 AUTO_MAP_DICT = {}
 for (r_type, main_cat, proj), sub_list in RAW_MAPPING_CONFIG.items():
     for sub in sub_list:
@@ -523,7 +289,6 @@ def find_header_row(file_path: Path, search_range: tuple, encoding: str = 'utf-8
             else:
                 df = pd.read_excel(file_path, header=i, engine='openpyxl', nrows=1)
 
-            # 检查是否包含关键列名
             cols_str = ' '.join(df.columns.astype(str))
             if any(kw in cols_str for kw in HEADER_KEYWORDS):
                 logger.debug(f"检测到 header 在第 {i} 行")
@@ -531,7 +296,6 @@ def find_header_row(file_path: Path, search_range: tuple, encoding: str = 'utf-8
         except Exception:
             continue
 
-    # 未找到，使用默认值
     logger.debug(f"未能自动检测 header，使用默认值: {start}")
     return start
 
@@ -572,7 +336,7 @@ def load_settings(rule_path: Path):
         if loaded_count > 0:
             logger.info(f"已加载 {loaded_count} 项自定义配置")
     except ValueError:
-        pass  # Settings sheet 不存在
+        pass
     except Exception as e:
         logger.warning(f"加载配置失败: {e}")
 
@@ -673,7 +437,6 @@ def process_transfers(df, main_col, sub_col):
     if df.empty:
         return pd.DataFrame()
 
-    # 获取配置变量
     t1 = CONFIG['TRANSFER_TARGET_1']
     t2 = CONFIG['TRANSFER_TARGET_2']
     t_sb = CONFIG['TRANSFER_TARGET_SNOWBALL']
@@ -683,7 +446,6 @@ def process_transfers(df, main_col, sub_col):
     acc_pingan = CONFIG['ACCOUNT_PINGAN']
     acc_wht = CONFIG['ACCOUNT_WUHANTONG']
 
-    # 生成掩码
     mask_t1 = df["交易对方"] == t1
     mask_t2 = df["交易对方"] == t2
     mask_sb = df["交易对方"] == t_sb
@@ -696,20 +458,17 @@ def process_transfers(df, main_col, sub_col):
         if not mask.any():
             return
         base = df[mask].copy()
-        # 转出
         o_rec = base.copy()
         o_rec['金额'] = base['金额'] * -1
         o_rec['记录类型'] = '转出'
         o_rec['账户'] = out_acc
         o_rec[sub_col] = sub_val
-        # 转入
         i_rec = base.copy()
         i_rec['记录类型'] = '转入'
         i_rec['账户'] = in_acc
         i_rec[sub_col] = sub_val
         res_list.extend([o_rec, i_rec])
 
-    # 执行生成逻辑
     create_records(mask_t1 & mask_in, acc_lq2, acc_lq3)
     create_records(mask_t1 & mask_out, acc_lq3, acc_lq2)
     create_records(mask_t2, acc_lq3, acc_icbc, '提现')
@@ -729,7 +488,7 @@ def process_transfers(df, main_col, sub_col):
 
 
 def process_debt_keywords(df, sub_col):
-    """处理借贷关键词：借入xxx, 借出xxx, 代付xxx, 押金xxx, 报账xxx"""
+    """处理借贷关键词"""
     df = df.copy()
     extracted = df['描述'].str.extract(DEBT_PATTERN, expand=True)
     mask_found = extracted[0].notna()
@@ -743,7 +502,7 @@ def process_debt_keywords(df, sub_col):
 
 
 def process_reimbursement(df, sub_col):
-    """处理报销关键词：住宿费xxx, 材料费xxx 等"""
+    """处理报销关键词"""
     df = df.copy()
     reim_extracted = df['描述'].str.extract(REIM_PATTERN, expand=True)
     mask_reim = reim_extracted[0].notna()
@@ -753,7 +512,6 @@ def process_reimbursement(df, sub_col):
         df.loc[mask_reim, '名称'] = reim_extracted[0].loc[mask_reim].values
         df.loc[mask_reim, '描述'] = reim_extracted[1].loc[mask_reim].str.strip().values
         df.loc[mask_reim, '项目'] = ""
-        # 设置标签
         mask_travel = reim_extracted[0].isin(REIM_TRAVEL_KEYS) & mask_reim
         mask_expense = reim_extracted[0].isin(REIM_EXPENSE_KEYS) & mask_reim
         if mask_travel.any():
@@ -764,7 +522,7 @@ def process_reimbursement(df, sub_col):
 
 
 def process_generic_keywords(df, sub_col):
-    """处理通用分类词（向量化版本）"""
+    """处理通用分类词"""
     df = df.copy()
     generic_extracted = df['描述'].str.extract(GENERIC_PATTERN, expand=True)
     mask_generic = generic_extracted[0].notna() & (df[sub_col] == "")
@@ -775,14 +533,12 @@ def process_generic_keywords(df, sub_col):
     matched_keys = generic_extracted.loc[mask_generic, 0]
     tails = generic_extracted.loc[mask_generic, 1].str.strip()
 
-    # 正餐特殊处理
     mask_meal = matched_keys == '正餐'
     if mask_meal.any():
         meal_idx = mask_meal[mask_meal].index
         df.loc[meal_idx, '描述'] = tails.loc[meal_idx]
         df.loc[meal_idx, '名称'] = ""
 
-    # 子类别关键词处理（向量化）
     for keyword, subcat in SUBCAT_KEYWORDS.items():
         mask_kw = matched_keys == keyword
         if mask_kw.any():
@@ -791,7 +547,6 @@ def process_generic_keywords(df, sub_col):
             df.loc[kw_idx, '描述'] = tails.loc[kw_idx]
             df.loc[kw_idx, '名称'] = ""
 
-    # 名称关键词处理（向量化）
     for keyword, (subcat, name) in NAME_KEYWORDS.items():
         mask_kw = matched_keys == keyword
         if mask_kw.any():
@@ -804,13 +559,7 @@ def process_generic_keywords(df, sub_col):
 
 
 def process_heuristics(df_in, main_col, sub_col):
-    """
-    启发式分类推导
-    逻辑优先级：
-    1. DATA_SOURCE (关键词推导) - 基础层 (不填名称)
-    2. 子类/通用词 (正餐/日用) - 推导分类，不填名称，切分描述
-    3. 报销词 - 填名称，填对象
-    """
+    """启发式分类推导"""
     df = df_in.copy()
     df.reset_index(drop=True, inplace=True)
 
@@ -827,14 +576,12 @@ def process_heuristics(df_in, main_col, sub_col):
         df['描述'].astype(str)
     )
 
-    # Phase 1: 基础推导 (使用 SORTED_INGREDIENT_CONFIG)
     uncat = df[sub_col] == ""
-    mask_meal = search_series.str.contains(PATTERNS['MEAL'], regex=True)
+    mask_meal = search_series.str.contains(PATTERNS.get('MEAL', re.compile('')), regex=True) if 'MEAL' in PATTERNS else pd.Series(False, index=df.index)
     mask_ingredients_exact = search_series.str.contains(
-        PATTERNS['INGREDIENTS'], regex=True)
+        PATTERNS.get('INGREDIENTS', re.compile('')), regex=True) if 'INGREDIENTS' in PATTERNS else pd.Series(False, index=df.index)
 
-    # 预计算 COOKED 匹配（用于排除）
-    mask_cooked = search_series.str.contains(PATTERNS.get('COOKED', re.compile('')), regex=True)
+    mask_cooked = search_series.str.contains(PATTERNS.get('COOKED', re.compile('')), regex=True) if 'COOKED' in PATTERNS else pd.Series(False, index=df.index)
 
     main_filter = uncat | (df[main_col].isin(['购物', '居家', '饮食']))
 
@@ -854,7 +601,6 @@ def process_heuristics(df_in, main_col, sub_col):
             mask = search_series.str.contains(pat, regex=True) & (
                 (~mask_meal) | (key == 'COOKED')) & main_filter
 
-        # 使用 exclude_if_match 配置排除熟食
         if 'COOKED' in exclude_if_match:
             mask &= (~mask_cooked)
 
@@ -864,16 +610,16 @@ def process_heuristics(df_in, main_col, sub_col):
                 df.loc[mask, '对象'] = obj
 
     # 停车费
-    mask = search_series.str.contains(PATTERNS['Parking_fee'], regex=True)
-    if mask.any():
-        df.loc[mask, [sub_col, '名称', '对象']] = ['报账', '停车费', '天之逸']
+    if 'Parking_fee' in PATTERNS:
+        mask = search_series.str.contains(PATTERNS['Parking_fee'], regex=True)
+        if mask.any():
+            df.loc[mask, [sub_col, '名称', '对象']] = ['报账', '停车费', '天之逸']
 
-    # 借贷/报销/通用分类词
     df = process_debt_keywords(df, sub_col)
     df = process_reimbursement(df, sub_col)
     df = process_generic_keywords(df, sub_col)
 
-    # MEAL 自动推导的时间段分类（使用配置常量）
+    # MEAL 时间段分类
     mask_meal_from_memo = df.get('_is_meal_from_memo', False) == True
     mask_time_meal = (df[sub_col] == "") & (mask_meal | mask_meal_from_memo)
     if mask_time_meal.any():
@@ -889,22 +635,16 @@ def process_heuristics(df_in, main_col, sub_col):
     mapped_values = df[sub_col].map(AUTO_MAP_DICT)
     mask_mapped = mapped_values.notna()
     if mask_mapped.any():
-        df.loc[mask_mapped, '记录类型'] = mapped_values[mask_mapped].apply(
-            lambda x: x[0])
-        df.loc[mask_mapped, main_col] = mapped_values[mask_mapped].apply(
-            lambda x: x[1])
-        df.loc[mask_mapped, '项目'] = mapped_values[mask_mapped].apply(
-            lambda x: x[2])
+        df.loc[mask_mapped, '记录类型'] = mapped_values[mask_mapped].apply(lambda x: x[0])
+        df.loc[mask_mapped, main_col] = mapped_values[mask_mapped].apply(lambda x: x[1])
+        df.loc[mask_mapped, '项目'] = mapped_values[mask_mapped].apply(lambda x: x[2])
 
     df['描述'] = df['描述'].str.strip()
     return df
 
 
 def parse_memo_subcategory(df, main_col, sub_col):
-    """
-    解析备注中的子类别，格式：子类别+描述
-    v11.69: 向量化点号分隔处理
-    """
+    """解析备注中的子类别"""
     if '备注' not in df.columns:
         return df
 
@@ -912,31 +652,26 @@ def parse_memo_subcategory(df, main_col, sub_col):
     df['_is_meal_from_memo'] = False
     memo_series = df['备注'].astype(str).str.strip().replace('nan', '')
 
-    # 特殊关键词映射
     special_keywords = {'日用': ('支出', '购物', '日常用品')}
     for keyword, (r_type, main_cat, subcat) in special_keywords.items():
         pattern = rf'^{re.escape(keyword)}(.*)$'
         matches = memo_series.str.match(pattern, na=False)
         if matches.any():
-            extracted = memo_series[matches].str.replace(
-                pattern, r'\1', regex=True).str.strip()
+            extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
             df.loc[matches, '记录类型'] = r_type
             df.loc[matches, main_col] = main_cat
             df.loc[matches, sub_col] = subcat
             df.loc[matches, '描述'] = extracted
             memo_series = memo_series.where(~matches, '')
 
-    # 正餐特殊处理
     pattern = rf'^正餐(.*)$'
     matches = memo_series.str.match(pattern, na=False)
     if matches.any():
-        extracted = memo_series[matches].str.replace(
-            pattern, r'\1', regex=True).str.strip()
+        extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
         df.loc[matches, '描述'] = extracted
         df.loc[matches, '_is_meal_from_memo'] = True
         memo_series = memo_series.where(~matches, '')
 
-    # 处理标准子类别
     for subcat in VALID_SUBCATS:
         if subcat not in AUTO_MAP_DICT or subcat == '正餐':
             continue
@@ -948,19 +683,16 @@ def parse_memo_subcategory(df, main_col, sub_col):
             continue
 
         r_type, main_cat, proj = AUTO_MAP_DICT[subcat]
-        extracted = memo_series[matches].str.replace(
-            pattern, r'\1', regex=True).str.strip()
+        extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
 
         df.loc[matches, '记录类型'] = r_type
         df.loc[matches, main_col] = main_cat
         df.loc[matches, sub_col] = subcat
 
-        # [v11.69] 向量化点号分隔处理
         if subcat in RECEIVABLE_PAYABLE_SUBCATS:
             matched_indices = matches[matches].index
             mask_dot = extracted.str.contains(r'\.', regex=True, na=False)
 
-            # 处理包含点号的记录
             dot_indices = matched_indices[mask_dot[matched_indices]]
             if len(dot_indices) > 0:
                 dot_content = extracted.loc[dot_indices]
@@ -969,7 +701,6 @@ def parse_memo_subcategory(df, main_col, sub_col):
                 obj_values = split_df[0].str.strip()
                 desc_values = split_df[1].str.strip() if 1 in split_df.columns else pd.Series('', index=dot_indices)
 
-                # 处理边界情况：如果对象为空，使用整个内容
                 empty_obj_mask = (obj_values == '') | obj_values.isna()
                 if empty_obj_mask.any():
                     obj_values = obj_values.where(
@@ -981,7 +712,6 @@ def parse_memo_subcategory(df, main_col, sub_col):
                 df.loc[dot_indices, '对象'] = obj_values.values
                 df.loc[dot_indices, '描述'] = desc_values.values
 
-            # 处理不含点号的记录
             no_dot_indices = matched_indices[~mask_dot[matched_indices]]
             if len(no_dot_indices) > 0:
                 df.loc[no_dot_indices, '对象'] = extracted.loc[no_dot_indices]
@@ -998,22 +728,17 @@ def apply_rules(df, df_rules, main_col, sub_col):
     """应用字典规则匹配"""
     df = df.copy()
     df['商家(old)'] = df.get('交易对方', pd.NA).astype(str).str.strip()
-    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in [
-        '商家(old)', 'is_regex']}
+    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in ['商家(old)', 'is_regex']}
 
-    # 精确匹配
     df = pd.merge(
         df,
-        df_rules[df_rules['is_regex'] == 0].rename(
-            columns=rename_map).drop(columns='is_regex', errors='ignore'),
+        df_rules[df_rules['is_regex'] == 0].rename(columns=rename_map).drop(columns='is_regex', errors='ignore'),
         on='商家(old)', how='left'
     )
     df.reset_index(drop=True, inplace=True)
 
-    # 正则匹配
     rule_col_check = f"{main_col}_rule"
-    uncat_mask = df[rule_col_check].isna(
-    ) if rule_col_check in df.columns else pd.Series(True, index=df.index)
+    uncat_mask = df[rule_col_check].isna() if rule_col_check in df.columns else pd.Series(True, index=df.index)
 
     if uncat_mask.any():
         regex_rules = df_rules[df_rules['is_regex'] == 1]
@@ -1033,7 +758,6 @@ def apply_rules(df, df_rules, main_col, sub_col):
                 except re.error as e:
                     logger.warning(f"正则表达式错误 '{r['商家(old)']}': {e}")
 
-    # 合并规则列
     for orig, rule in rename_map.items():
         if rule in df.columns and orig != '描述':
             df[orig] = df[rule].combine_first(df[orig])
@@ -1043,11 +767,10 @@ def apply_rules(df, df_rules, main_col, sub_col):
 
 
 def finalize_records(df, main_col, sub_col):
-    """最终处理：金额符号、日期时间、账户等"""
+    """最终处理"""
     df = df.copy()
 
-    mask_neg = (df['记录类型'].isin(['支出', '应付款项', '应收款项'])) & (
-        df.get('收/支') == '支出')
+    mask_neg = (df['记录类型'].isin(['支出', '应付款项', '应收款项'])) & (df.get('收/支') == '支出')
     df.loc[mask_neg, '金额'] *= -1
 
     mask_borrow = df[sub_col] == '借入'
@@ -1076,44 +799,33 @@ def process_main(df_in, df_rules, main_col, sub_col):
         if c not in df.columns:
             df[c] = ""
 
-    # 筛选有效交易
     df = df[
         (~df["当前状态"].isin(["已全额退款", "交易关闭"])) &
         (abs(df["金额"]) > 0.0001)
     ].copy()
 
-    # [v11.67] 自动推断空白的收/支列
     all_reim_keywords = REIM_TRAVEL_KEYS + REIM_EXPENSE_KEYS
     reim_pattern = '|'.join(all_reim_keywords)
 
     if '备注' in df.columns:
         memo = df['备注'].astype(str).str.strip()
-        mask_empty_inout = df['收/支'].fillna('').astype(
-            str).str.strip().isin(['', 'nan', 'NaN', 'None'])
+        mask_empty_inout = df['收/支'].fillna('').astype(str).str.strip().isin(['', 'nan', 'NaN', 'None'])
 
-        # 借入 → 收入
-        mask_borrow_in = mask_empty_inout & memo.str.contains(
-            r'^借入', na=False, regex=True)
+        mask_borrow_in = mask_empty_inout & memo.str.contains(r'^借入', na=False, regex=True)
         if mask_borrow_in.any():
             df.loc[mask_borrow_in, '收/支'] = '收入'
 
-        # 借出/代付/报账/押金 → 支出
-        mask_borrow_out = mask_empty_inout & memo.str.contains(
-            r'^(?:借出|代付|报账|押金)', na=False, regex=True)
+        mask_borrow_out = mask_empty_inout & memo.str.contains(r'^(?:借出|代付|报账|押金)', na=False, regex=True)
         if mask_borrow_out.any():
             df.loc[mask_borrow_out, '收/支'] = '支出'
 
-        # 报销关键词开头 → 支出
-        mask_reim = mask_empty_inout & memo.str.contains(
-            rf'^(?:{reim_pattern})', na=False, regex=True)
+        mask_reim = mask_empty_inout & memo.str.contains(rf'^(?:{reim_pattern})', na=False, regex=True)
         if mask_reim.any():
             df.loc[mask_reim, '收/支'] = '支出'
 
-    # 借入/借出等债务关键词检测：支出 OR 包含特殊关键词
     memo_series = df['备注'].astype(str).str.strip()
     all_special_pattern = '|'.join(DEBT_KEYWORDS) + '|' + reim_pattern
-    mask_has_special_keyword = memo_series.str.contains(
-        rf'^(?:{all_special_pattern})', na=False, regex=True)
+    mask_has_special_keyword = memo_series.str.contains(rf'^(?:{all_special_pattern})', na=False, regex=True)
     df = df[(df["收/支"] == "支出") | mask_has_special_keyword].copy()
 
     if df.empty:
@@ -1122,16 +834,12 @@ def process_main(df_in, df_rules, main_col, sub_col):
     logger.info(f"处理主交易 ({len(df)} 条)")
 
     df = ensure_columns(df, main_col, sub_col)
-    df['支付方式'] = df['支付方式'].astype(str).replace(
-        STANDARDIZE_ACCOUNTS, regex=True)
+    df['支付方式'] = df['支付方式'].astype(str).replace(STANDARDIZE_ACCOUNTS, regex=True)
 
-    # 应用规则
     df = apply_rules(df, df_rules, main_col, sub_col)
 
-    # 淘宝订单识别
     if '商户单号' in df.columns:
-        mask_tb = (df.get('_source_tag', '') == '#AliPay') & df['商户单号'].astype(
-            str).str.strip().str.startswith('T200P', na=False)
+        mask_tb = (df.get('_source_tag', '') == '#AliPay') & df['商户单号'].astype(str).str.strip().str.startswith('T200P', na=False)
         if mask_tb.any():
             df.loc[mask_tb, '商家'] = '淘宝'
 
@@ -1143,23 +851,17 @@ def process_main(df_in, df_rules, main_col, sub_col):
     df['商家'] = df.get('商家', pd.NA).replace("", pd.NA).fillna(df['交易对方'])
     df[sub_col] = df[sub_col].astype(str).str.strip().replace("nan", "")
 
-    # 备注子类别解析
     df = parse_memo_subcategory(df, main_col, sub_col)
-
-    # 执行核心混合逻辑
     df = process_heuristics(df, main_col, sub_col)
 
-    # 清理标记列
     if '_is_meal_from_memo' in df.columns:
         df.drop(columns=['_is_meal_from_memo'], inplace=True)
 
-    # 日期验证
     if df['交易时间'].isna().any():
         failed_count = df['交易时间'].isna().sum()
         logger.warning(f"{failed_count} 条记录日期解析失败，已跳过")
         df = df[df['交易时间'].notna()]
 
-    # 最终处理
     df = finalize_records(df, main_col, sub_col)
 
     return df
@@ -1196,13 +898,11 @@ def save_result(df, cols):
 
     if '标签' in df.columns:
         m = ~df['记录类型'].isin(['转入', '转出'])
-        df.loc[m, '标签'] = (df.loc[m, '标签'].fillna(
-            "") + " " + df.loc[m, '_source_tag']).str.strip()
+        df.loc[m, '标签'] = (df.loc[m, '标签'].fillna("") + " " + df.loc[m, '_source_tag']).str.strip()
 
     type_priority = {'转出': 0, '转入': 1}
     df['_Type_Rank'] = df['记录类型'].map(type_priority).fillna(0)
-    df.sort_values(['_Sort_Date', '_Type_Rank'],
-                   ascending=[False, True], inplace=True)
+    df.sort_values(['_Sort_Date', '_Type_Rank'], ascending=[False, True], inplace=True)
 
     if not TARGET_DIR.exists():
         TARGET_DIR.mkdir(parents=True, exist_ok=True)
@@ -1217,7 +917,7 @@ def main():
     """主函数"""
     print(f"{BColors.BOLD}{BColors.CYAN}")
     print("=" * 50)
-    print(f"  Moze 导入脚本 v{__version__}")
+    print(f"  Moze 导入脚本 v{__version__} (JSON Config)")
     print(f"  作者: {__author__} | 更新: {__updated__}")
     print("=" * 50)
     print(f"{BColors.ENDC}")
@@ -1229,8 +929,7 @@ def main():
             input("按 Enter 退出")
             return
 
-        cols = [c for c in df_rules.columns if c not in [
-            '商家(old)', 'is_regex']]
+        cols = [c for c in df_rules.columns if c not in ['商家(old)', 'is_regex']]
         main_col = next((c for c in cols if "主类" in c), None)
         sub_col = next((c for c in cols if "子类" in c), None)
         if not main_col:
@@ -1241,7 +940,6 @@ def main():
         if not files:
             return
 
-        # 读取文件
         dfs = []
         for f in tqdm(files, desc="读取文件", disable=not HAS_TQDM):
             d = sniff_and_load_data(Path(f))
@@ -1267,11 +965,9 @@ def main():
 
         res_dfs = []
         if mask_trans.any():
-            res_dfs.append(process_transfers(
-                df_raw[mask_trans].copy(), main_col, sub_col))
+            res_dfs.append(process_transfers(df_raw[mask_trans].copy(), main_col, sub_col))
         if (~mask_trans).any():
-            res_dfs.append(process_main(
-                df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
+            res_dfs.append(process_main(df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
 
         if not res_dfs:
             logger.warning("无结果")
@@ -1285,12 +981,9 @@ def main():
         path = save_result(df_final, cols)
         print(f"\n{BColors.OKGREEN}✅ 成功! 文件: {path}{BColors.ENDC}")
 
-        # 数据验证
         checks = [
-            ('支出/收入/转账', df_final['记录类型'].isin(['支出',
-             '收入', '转入', '转出']), [main_col, sub_col]),
-            ('应收/应付', df_final['记录类型'].isin(['应收款项', '应付款项']),
-             [main_col, sub_col, '对象'])
+            ('支出/收入/转账', df_final['记录类型'].isin(['支出', '收入', '转入', '转出']), [main_col, sub_col]),
+            ('应收/应付', df_final['记录类型'].isin(['应收款项', '应付款项']), [main_col, sub_col, '对象'])
         ]
 
         has_issues = False
@@ -1298,11 +991,9 @@ def main():
             bad = mask & df_final[check_cols].isin(["", pd.NA]).any(axis=1)
             if bad.any():
                 has_issues = True
-                print(
-                    f"{BColors.FAIL}[!] {bad.sum()} 条【{name}】记录缺失关键信息:{BColors.ENDC}")
+                print(f"{BColors.FAIL}[!] {bad.sum()} 条【{name}】记录缺失关键信息:{BColors.ENDC}")
                 display_cols = ['日期', '商家', '金额', '描述'] + check_cols
-                print(df_final.loc[bad, display_cols].fillna(
-                    '').head(5).to_string(index=True))
+                print(df_final.loc[bad, display_cols].fillna('').head(5).to_string(index=True))
 
         print(f"{BColors.OKGREEN}✅ 处理完成{BColors.ENDC}")
 
