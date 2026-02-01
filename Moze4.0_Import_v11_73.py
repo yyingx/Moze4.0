@@ -107,13 +107,13 @@ RECEIVABLE_PAYABLE_SUBCATS = {'借出', '代付', '报账', '押金', '借入'}
 # 子类别关键词映射 (v11.73 扩展)
 SUBCAT_KEYWORDS = {
     # 饮食
-    '日用': '日常用品', '食材': '食材', '零食': '零食', '饮料水果': '饮料水果', '纯净水': '纯净水',
-    '早餐': '早餐', '午餐': '午餐', '晚餐': '晚餐', '夜宵': '夜宵',
+    '食材': '食材', '零食': '零食', '饮料水果': '饮料水果', '纯净水': '纯净水',
+    '早餐': '早餐', '午餐': '午餐', '晚餐': '晚餐', '夜宵': '夜宵', '正餐': '正餐',
     # 购物
-    '服饰': '服饰鞋包', '服饰鞋包': '服饰鞋包', '数码': '数码电器', '数码电器': '数码电器', 
-    '家具': '家具家纺', '家具家纺': '家具家纺', '大件': '大件',
-    # 交通
-    '加油': '加油充电', '加油充电': '加油充电', '充电': '加油充电', '公共交通': '公共交通',
+    '日用': '日常用品', '服饰': '服饰鞋包', '服饰鞋包': '服饰鞋包',
+    '数码': '数码电器', '数码电器': '数码电器', '家具': '家具家纺', '家具家纺': '家具家纺', '大件': '大件',
+    # 交通 (加油/充电 在 NAME_KEYWORDS 中，需要设置名称字段)
+    '加油充电': '加油充电', '公共交通': '公共交通',
     '火车': '火车', '机票': '机票', '出租车': '出租车', '停车费': '停车费',
     # 居家
     '房租': '房租', '水费': '水费', '电费': '电费', '物业费': '物业费', '宽带费': '宽带费',
@@ -129,17 +129,27 @@ SUBCAT_KEYWORDS = {
     # 个人
     '保险': '保险', '礼金': '礼金红包', '红包': '礼金红包',
     # 收入
-    '薪资': '薪资', '福利补贴': '福利补贴', '年终奖': '年终奖',
+    '薪资': '薪资', '福利补贴': '福利补贴', '年终奖': '年终奖', '收红包': '收红包',
+    '利息收入': '利息收入', '投资盈利': '投资盈利', '二手折旧': '二手折旧', '其他收入': '其他收入',
 }
 
 # 名称关键词映射 (v11.73 扩展)
 NAME_KEYWORDS = {
-    '水果': ('饮料水果', '水果'), '饮料': ('饮料水果', '饮料'),
-    '蔬菜': ('食材', '蔬菜'), '猪肉': ('食材', '猪肉'), '牛羊肉': ('食材', '牛羊肉'),
-    '禽肉': ('食材', '禽肉'), '鸡肉': ('食材', '禽肉'), '鸭肉': ('食材', '禽肉'),
-    '海鲜': ('食材', '海鲜水产'), '海鲜水产': ('食材', '海鲜水产'),
-    '豆制品': ('食材', '豆制品'), '熟食': ('食材', '熟食'), '大米': ('食材', '大米'),
-    '鸡蛋': ('食材', '蛋及蛋制品'), '节点': ('虚拟其他', '节点'),
+    '水果': ('饮料水果', '水果'),
+    '饮料': ('饮料水果', '饮料'),
+    '充电': ('加油充电', '充电'),
+    '加油': ('加油充电', '加油'),
+    '蔬菜': ('食材', '蔬菜'),
+    '猪肉': ('食材', '猪肉'),
+    '牛羊肉': ('食材', '牛羊肉'),
+    '禽肉': ('食材', '禽肉'),
+    '海鲜': ('食材', '海鲜水产'),
+    '海鲜水产': ('食材', '海鲜水产'),
+    '豆制品': ('食材', '豆制品'),
+    '熟食': ('食材', '熟食'),
+    '大米': ('食材', '大米'),
+    '鸡蛋': ('食材', '蛋及蛋制品'),
+    '节点': ('虚拟其他', '节点')
 }
 
 # --- 1. DATA_SOURCE ---
@@ -395,9 +405,11 @@ def find_header_row(file_path: Path, search_range: tuple, encoding: str = 'utf-8
     for i in range(start, end + 1):
         try:
             if file_path.suffix.lower() == '.csv':
-                df = pd.read_csv(file_path, header=i, encoding=encoding, nrows=1)
+                df = pd.read_csv(file_path, header=i,
+                                 encoding=encoding, nrows=1)
             else:
-                df = pd.read_excel(file_path, header=i, engine='openpyxl', nrows=1)
+                df = pd.read_excel(file_path, header=i,
+                                   engine='openpyxl', nrows=1)
 
             cols_str = ' '.join(df.columns.astype(str))
             if any(kw in cols_str for kw in HEADER_KEYWORDS):
@@ -486,8 +498,10 @@ def sniff_and_load_data(file_path: Path):
 
     try:
         if file_path.suffix.lower() == '.csv':
-            header = find_header_row(file_path, ALIPAY_HEADER_RANGE, ALIPAY_ENCODING)
-            df = pd.read_csv(file_path, header=header, encoding=ALIPAY_ENCODING)
+            header = find_header_row(
+                file_path, ALIPAY_HEADER_RANGE, ALIPAY_ENCODING)
+            df = pd.read_csv(file_path, header=header,
+                             encoding=ALIPAY_ENCODING)
             ftype = "AliPay"
         elif file_path.suffix.lower() == '.xlsx':
             header = find_header_row(file_path, WECHAT_HEADER_RANGE)
@@ -507,7 +521,8 @@ def sniff_and_load_data(file_path: Path):
             return None
 
         df['金额(元)'] = pd.to_numeric(
-            df['金额(元)'].astype(str).str.replace(r'[¥,]', '', regex=True).str.strip(),
+            df['金额(元)'].astype(str).str.replace(
+                r'[¥,]', '', regex=True).str.strip(),
             errors='coerce'
         ).fillna(0)
 
@@ -630,35 +645,43 @@ def process_reimbursement(df, sub_col):
 def process_generic_keywords(df, sub_col):
     """处理通用分类词（向量化版本）"""
     generic_extracted = df['描述'].str.extract(GENERIC_PATTERN, expand=True)
-    mask_generic = generic_extracted[0].notna() & (df[sub_col] == "")
 
-    if not mask_generic.any():
-        return df
+    # SUBCAT_KEYWORDS: 只处理子类别为空的记录
+    mask_subcat = generic_extracted[0].notna() & (df[sub_col] == "")
+    # NAME_KEYWORDS: 无论子类别是否为空都处理（因为需要设置名称和描述）
+    mask_name = generic_extracted[0].notna() & generic_extracted[0].isin(NAME_KEYWORDS.keys())
 
-    matched_keys = generic_extracted.loc[mask_generic, 0]
-    tails = generic_extracted.loc[mask_generic, 1].str.strip()
+    # 处理正餐和 SUBCAT_KEYWORDS
+    if mask_subcat.any():
+        matched_keys = generic_extracted.loc[mask_subcat, 0]
+        tails = generic_extracted.loc[mask_subcat, 1].str.strip()
 
-    mask_meal = matched_keys == '正餐'
-    if mask_meal.any():
-        meal_idx = mask_meal[mask_meal].index
-        df.loc[meal_idx, '描述'] = tails.loc[meal_idx]
-        df.loc[meal_idx, '名称'] = ""
+        mask_meal = matched_keys == '正餐'
+        if mask_meal.any():
+            meal_idx = mask_meal[mask_meal].index
+            df.loc[meal_idx, '描述'] = tails.loc[meal_idx]
+            df.loc[meal_idx, '名称'] = ""
 
-    for keyword, subcat in SUBCAT_KEYWORDS.items():
-        mask_kw = matched_keys == keyword
-        if mask_kw.any():
-            kw_idx = mask_kw[mask_kw].index
-            df.loc[kw_idx, sub_col] = subcat
-            df.loc[kw_idx, '描述'] = tails.loc[kw_idx]
-            df.loc[kw_idx, '名称'] = ""
+        for keyword, subcat in SUBCAT_KEYWORDS.items():
+            mask_kw = matched_keys == keyword
+            if mask_kw.any():
+                kw_idx = mask_kw[mask_kw].index
+                df.loc[kw_idx, sub_col] = subcat
+                df.loc[kw_idx, '描述'] = tails.loc[kw_idx]
+                df.loc[kw_idx, '名称'] = ""
 
-    for keyword, (subcat, name) in NAME_KEYWORDS.items():
-        mask_kw = matched_keys == keyword
-        if mask_kw.any():
-            kw_idx = mask_kw[mask_kw].index
-            df.loc[kw_idx, sub_col] = subcat
-            df.loc[kw_idx, '名称'] = name
-            df.loc[kw_idx, '描述'] = tails.loc[kw_idx]
+    # 处理 NAME_KEYWORDS（独立处理，不受子类别限制）
+    if mask_name.any():
+        matched_keys_name = generic_extracted.loc[mask_name, 0]
+        tails_name = generic_extracted.loc[mask_name, 1].str.strip()
+
+        for keyword, (subcat, name) in NAME_KEYWORDS.items():
+            mask_kw = matched_keys_name == keyword
+            if mask_kw.any():
+                kw_idx = mask_kw[mask_kw].index
+                df.loc[kw_idx, sub_col] = subcat
+                df.loc[kw_idx, '名称'] = name
+                df.loc[kw_idx, '描述'] = tails_name.loc[kw_idx]
 
     return df
 
@@ -706,7 +729,8 @@ def process_heuristics(df_in, main_col, sub_col):
         # [v11.71] 通用化排除逻辑
         for exclude_key in exclude_list:
             if exclude_key in PATTERNS:
-                mask &= (~search_series.str.contains(PATTERNS[exclude_key], regex=True))
+                mask &= (~search_series.str.contains(
+                    PATTERNS[exclude_key], regex=True))
 
         if mask.any():
             df.loc[mask, [sub_col, '名称']] = [sub_c, name]
@@ -808,14 +832,16 @@ def parse_memo_subcategory(df, main_col, sub_col):
                 split_df = dot_content.str.split('.', n=1, expand=True)
 
                 obj_values = split_df[0].str.strip()
-                desc_values = split_df[1].str.strip() if 1 in split_df.columns else pd.Series('', index=dot_indices)
+                desc_values = split_df[1].str.strip(
+                ) if 1 in split_df.columns else pd.Series('', index=dot_indices)
 
                 # 处理边界情况：如果对象为空，使用整个内容
                 empty_obj_mask = (obj_values == '') | obj_values.isna()
                 if empty_obj_mask.any():
                     obj_values = obj_values.where(
                         ~empty_obj_mask,
-                        dot_content.str.replace('.', '', regex=False).str.strip()
+                        dot_content.str.replace(
+                            '.', '', regex=False).str.strip()
                     )
                     desc_values = desc_values.where(~empty_obj_mask, '')
 
@@ -831,6 +857,8 @@ def parse_memo_subcategory(df, main_col, sub_col):
             df.loc[matches, '描述'] = extracted
 
         memo_series = memo_series.where(~matches, '')
+
+    # NAME_KEYWORDS 在 process_generic_keywords() 中统一处理
 
     return df
 
@@ -864,7 +892,8 @@ def apply_rules(df, df_rules, main_col, sub_col):
                 if to_match.empty:
                     break
                 try:
-                    match_mask = to_match.str.contains(r['商家(old)'], regex=True, na=False)
+                    match_mask = to_match.str.contains(
+                        r['商家(old)'], regex=True, na=False)
                     match_indices = to_match[match_mask].index
                     if not match_indices.empty:
                         for c, rc in rename_map.items():
@@ -925,7 +954,8 @@ def process_main(df_in, df_rules, main_col, sub_col):
 
     if '备注' in df.columns:
         memo = df['备注'].astype(str).str.strip()
-        mask_empty_inout = df['收/支'].fillna('').astype(str).str.strip().isin(['', 'nan', 'NaN', 'None'])
+        mask_empty_inout = df['收/支'].fillna('').astype(
+            str).str.strip().isin(['', 'nan', 'NaN', 'None'])
 
         mask_borrow_in = mask_empty_inout & memo.str.contains(
             r'^借入', na=False, regex=True)
@@ -942,23 +972,29 @@ def process_main(df_in, df_rules, main_col, sub_col):
         if mask_reim.any():
             df.loc[mask_reim, '收/支'] = '支出'
 
-        # [v11.73] 支持 SUBCAT_KEYWORDS 中的关键词自动推断为支出
-        income_keywords = {'薪资', '福利补贴', '年终奖'}  # 收入类关键词排除
-        expense_subcat_keys = [k for k in SUBCAT_KEYWORDS.keys() if k not in income_keywords]
+        # [v11.73] 支持 SUBCAT_KEYWORDS 和 NAME_KEYWORDS 中的关键词自动推断为支出
+        income_keywords = {'薪资', '福利补贴', '年终奖', '收红包', '利息收入', '投资盈利', '二手折旧', '其他收入'}  # 收入类关键词排除
+        expense_subcat_keys = [
+            k for k in SUBCAT_KEYWORDS.keys() if k not in income_keywords]
         subcat_pattern = '|'.join(map(re.escape, expense_subcat_keys))
+        name_pattern = '|'.join(map(re.escape, NAME_KEYWORDS.keys()))
+        combined_pattern = subcat_pattern + '|' + name_pattern
         mask_subcat = mask_empty_inout & memo.str.contains(
-            rf'^(?:{subcat_pattern})', na=False, regex=True)
+            rf'^(?:{combined_pattern})', na=False, regex=True)
         if mask_subcat.any():
             df.loc[mask_subcat, '收/支'] = '支出'
 
     memo_series = df['备注'].astype(str).str.strip()
     all_reim_keywords = REIM_TRAVEL_KEYS + REIM_EXPENSE_KEYS
     reim_pattern = '|'.join(all_reim_keywords)
-    # [v11.73] 扩展特殊关键词模式，包含 SUBCAT_KEYWORDS
+    # [v11.73] 扩展特殊关键词模式，包含 SUBCAT_KEYWORDS 和 NAME_KEYWORDS
     income_keywords = {'薪资', '福利补贴', '年终奖'}
-    expense_subcat_keys = [k for k in SUBCAT_KEYWORDS.keys() if k not in income_keywords]
+    expense_subcat_keys = [
+        k for k in SUBCAT_KEYWORDS.keys() if k not in income_keywords]
     subcat_pattern = '|'.join(map(re.escape, expense_subcat_keys))
-    all_special_pattern = '|'.join(DEBT_KEYWORDS) + '|' + reim_pattern + '|' + subcat_pattern
+    name_pattern = '|'.join(map(re.escape, NAME_KEYWORDS.keys()))
+    all_special_pattern = '|'.join(
+        DEBT_KEYWORDS) + '|' + reim_pattern + '|' + subcat_pattern + '|' + name_pattern
     mask_has_special_keyword = memo_series.str.contains(
         rf'^(?:{all_special_pattern})', na=False, regex=True)
     df = df[(df["收/支"] == "支出") | mask_has_special_keyword].copy()
