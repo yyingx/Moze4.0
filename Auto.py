@@ -68,7 +68,8 @@ class GitAutoSync:
             capture_output=True,
             cwd=self.repo_path
         )
-        conflict_files = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        conflict_files = result.stdout.strip().split(
+            '\n') if result.stdout.strip() else []
 
         if conflict_files:
             print("\n⚠️ 发现合并冲突的文件：")
@@ -193,7 +194,8 @@ class GitAutoSync:
 def main():
     """主入口"""
     # 检查命令行参数
-    auto_mode = len(sys.argv) > 1 and sys.argv[1] in ['-a', '--auto', '-f', '--fast']
+    auto_mode = len(sys.argv) > 1 and sys.argv[1] in [
+        '-a', '--auto', '-f', '--fast']
 
     if auto_mode:
         print("🚀 [快速模式] 自动使用时间戳作为 commit 消息\n")
