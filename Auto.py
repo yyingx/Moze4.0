@@ -162,7 +162,10 @@ class GitAutoSync:
             print("   优化改进: 优化 vXX.XX: 改进内容")
             print("   Bug修复: 修复 vXX.XX: 问题描述")
             print("-"*50)
-            user_msg = input("📝 请输入 Commit 消息 (回车=默认时间戳): ").strip()
+            try:
+                user_msg = input("📝 请输入 Commit 消息 (回车=默认时间戳): ").strip()
+            except EOFError:
+                user_msg = ""
 
             if not user_msg:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -209,7 +212,10 @@ def main():
 
     # 如果不是快速模式，等待用户确认
     if not auto_mode:
-        input("\n按回车键关闭窗口...")
+        try:
+            input("\n按回车键关闭窗口...")
+        except EOFError:
+            pass
 
     # 返回退出码
     sys.exit(0 if success else 1)
