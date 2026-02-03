@@ -35,7 +35,8 @@ class GitAutoSync:
                     shell=True,
                     text=True,
                     capture_output=True,
-                    cwd=self.repo_path
+                    cwd=self.repo_path,
+                    encoding='utf-8'
                 )
 
                 # 显示输出
@@ -66,7 +67,8 @@ class GitAutoSync:
             shell=True,
             text=True,
             capture_output=True,
-            cwd=self.repo_path
+            cwd=self.repo_path,
+            encoding='utf-8'
         )
         conflict_files = result.stdout.strip().split(
             '\n') if result.stdout.strip() else []
@@ -86,7 +88,8 @@ class GitAutoSync:
             shell=True,
             text=True,
             capture_output=True,
-            cwd=self.repo_path
+            cwd=self.repo_path,
+            encoding='utf-8'
         )
         return bool(result.stdout.strip())
 
@@ -98,7 +101,8 @@ class GitAutoSync:
             shell=True,
             text=True,
             capture_output=True,
-            cwd=self.repo_path
+            cwd=self.repo_path,
+            encoding='utf-8'
         )
         if result.stdout.strip():
             print(result.stdout)
