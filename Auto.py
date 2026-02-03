@@ -93,6 +93,23 @@ class GitAutoSync:
         )
         return bool(result.stdout.strip())
 
+    def check_unpushed(self):
+        """检查是否有未推送的 commit"""
+        result = subprocess.run(
+            "git log @{u}..HEAD --oneline",
+            shell=True,
+            text=True,
+            capture_output=True,
+            cwd=self.repo_path,
+            encoding='utf-8'
+        )
+        unpushed = result.stdout.strip()
+        if unpushed:
+            print(f"\n📤 未推送的 commit：")
+            print(unpushed)
+            return True
+        return False
+
     def show_status(self):
         """显示当前变更状态"""
         print("\n📋 当前变更文件：")
@@ -137,9 +154,22 @@ class GitAutoSync:
         # === 2. 显示当前状态 ===
         self.show_status()
 
-        # === 3. 检查是否有变更 ===
-        if not self.check_changes():
-            print("\n✨ 没有新的变更需要提交")
+        # === 3. 检查是否有本地变更或未推送 commit ===
+        has_changes = self.check_changes()
+        has_unpushed = self.check_unpushed()
+
+        if not has_changes and not has_unpushed:
+            print("\n✨ 没有变更需要同步")
+            print("="*40)
+            return True
+
+        # 如果只有未推送 commit（没有本地变更），直接 push
+        if not has_changes and has_unpushed:
+            result = self.run_command("git push", "推送到远程仓库")
+            if not result:
+                return False
+            print("\n" + "="*40)
+            print("🎉 推送成功！")
             print("="*40)
             return True
 
