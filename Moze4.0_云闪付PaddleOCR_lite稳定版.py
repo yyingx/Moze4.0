@@ -139,7 +139,10 @@ class MozeOCRTool:
 
     def select_images(self):
         root = tk.Tk(); root.withdraw(); root.attributes('-topmost', True)
-        return filedialog.askopenfilenames(title="请选择账单截图")
+        return filedialog.askopenfilenames(
+            title="请选择账单截图",
+            filetypes=[("图片文件", "*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp"), ("所有文件", "*.*")]
+        )
 
     def clean_money(self, s):
         return re.sub(r'[^\d\.,\+\-_\—lI|\[\]]', '', s)
@@ -224,7 +227,7 @@ class MozeOCRTool:
                             clean = self.clean_money(txt)
                             if '.' in clean and len(clean) > 2:
                                 try:
-                                    val = float(clean.replace('l','1').replace('|','1'))
+                                    val = float(clean.replace(',','').replace('l','1').replace('|','1'))
                                     # [BUG FIX] 时间阈值从 24.59 改为 23.59
                                     if (0 <= val <= 23.59) and not any(s in txt for s in ['+','-','¥']): continue
                                     amt_val = val; has_amt = True; break
