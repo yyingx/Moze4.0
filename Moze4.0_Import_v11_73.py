@@ -260,6 +260,7 @@ DATA_SOURCE = {
         "正餐",
         # 1. 地点/校区
         "东苑一层", "东苑二层", "西区食堂", "外勤", "斯迪姆幼儿园-柏思思",
+        # "李李",
         # 2. 连锁品牌
         "三镇民生", "永和四喜", "老乡鸡", "黄蜀郎", "麦香园", "丝路",
         # 3. 强特征的风味/地域
@@ -649,7 +650,8 @@ def process_generic_keywords(df, sub_col):
     # SUBCAT_KEYWORDS: 只处理子类别为空的记录
     mask_subcat = generic_extracted[0].notna() & (df[sub_col] == "")
     # NAME_KEYWORDS: 无论子类别是否为空都处理（因为需要设置名称和描述）
-    mask_name = generic_extracted[0].notna() & generic_extracted[0].isin(NAME_KEYWORDS.keys())
+    mask_name = generic_extracted[0].notna(
+    ) & generic_extracted[0].isin(NAME_KEYWORDS.keys())
 
     # 处理正餐和 SUBCAT_KEYWORDS
     if mask_subcat.any():
@@ -973,7 +975,8 @@ def process_main(df_in, df_rules, main_col, sub_col):
             df.loc[mask_reim, '收/支'] = '支出'
 
         # [v11.73] 支持 SUBCAT_KEYWORDS 和 NAME_KEYWORDS 中的关键词自动推断为支出
-        income_keywords = {'薪资', '福利补贴', '年终奖', '收红包', '利息收入', '投资盈利', '二手折旧', '其他收入'}  # 收入类关键词排除
+        income_keywords = {'薪资', '福利补贴', '年终奖', '收红包',
+                           '利息收入', '投资盈利', '二手折旧', '其他收入'}  # 收入类关键词排除
         expense_subcat_keys = [
             k for k in SUBCAT_KEYWORDS.keys() if k not in income_keywords]
         subcat_pattern = '|'.join(map(re.escape, expense_subcat_keys))
