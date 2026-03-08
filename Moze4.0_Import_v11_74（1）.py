@@ -125,7 +125,6 @@ NAME_KEYWORDS = {
     '猪肉': ('食材', '猪肉'),
     '牛羊肉': ('食材', '牛羊肉'),
     '禽肉': ('食材', '禽肉'),
-    '海鲜': ('食材', '海鲜水产'),
     '海鲜水产': ('食材', '海鲜水产'),
     '豆制品': ('食材', '豆制品'),
     '熟食': ('食材', '熟食'),
@@ -161,7 +160,7 @@ DATA_SOURCE = {
         "尖椒", "秋葵", "玉米",
         "四季豆", "豇豆", "扁豆", "荷兰豆", "毛豆", "豌豆", "蚕豆", "刀豆",
         "香菇", "金针菇", "平菇", "杏鲍菇", "口蘑", "木耳", "银耳", "茶树菇", "猴头菇",
-        "大葱", "小葱", "蒜苗", "蒜苔"
+        "大葱", "小葱", "蒜苗", "蒜苔", "方便面"
     ],
     'RICE': ["大米", "五常"],
     'BEAN_PRODUCT': [
@@ -315,7 +314,8 @@ GENERIC_PATTERN = re.compile(
 
 # [v11.74] 模块级预计算：process_main 中用于筛选的完整特殊关键词模式
 _INCOME_KEYWORDS_EXCLUDE = {'薪资', '福利补贴', '年终奖'}
-_EXPENSE_SUBCAT_KEYS = [k for k in SUBCAT_KEYWORDS if k not in _INCOME_KEYWORDS_EXCLUDE]
+_EXPENSE_SUBCAT_KEYS = [
+    k for k in SUBCAT_KEYWORDS if k not in _INCOME_KEYWORDS_EXCLUDE]
 _REIM_PATTERN_STR = '|'.join(ALL_REIM_KEYS)
 _SUBCAT_PATTERN_STR = '|'.join(map(re.escape, _EXPENSE_SUBCAT_KEYS))
 _NAME_PATTERN_STR = '|'.join(map(re.escape, NAME_KEYWORDS.keys()))
@@ -330,9 +330,12 @@ _ALL_SPECIAL_FOR_INFER_STR = (
 INFER_EXPENSE_PATTERN = re.compile(rf"^(?:{_ALL_SPECIAL_FOR_INFER_STR})")
 
 # 用于推断收/支的分项模式（与 v11.73 保持一致）
-_INFER_EXPENSE_SUBCAT_KEYS = [k for k in SUBCAT_KEYWORDS if k not in {'薪资', '福利补贴', '年终奖', '收红包', '利息收入', '投资盈利', '二手折旧', '其他收入'}]
-INFER_SUBCAT_PATTERN = re.compile(rf"^(?:{'|'.join(map(re.escape, _INFER_EXPENSE_SUBCAT_KEYS))})")
-INFER_NAME_PATTERN = re.compile(rf"^(?:{'|'.join(map(re.escape, NAME_KEYWORDS.keys()))})")
+_INFER_EXPENSE_SUBCAT_KEYS = [k for k in SUBCAT_KEYWORDS if k not in {
+    '薪资', '福利补贴', '年终奖', '收红包', '利息收入', '投资盈利', '二手折旧', '其他收入'}]
+INFER_SUBCAT_PATTERN = re.compile(
+    rf"^(?:{'|'.join(map(re.escape, _INFER_EXPENSE_SUBCAT_KEYS))})")
+INFER_NAME_PATTERN = re.compile(
+    rf"^(?:{'|'.join(map(re.escape, NAME_KEYWORDS.keys()))})")
 
 
 # ==========================================
@@ -358,9 +361,11 @@ def find_header_row(file_path: Path, search_range: tuple, encoding: str = 'utf-8
     for i in range(start, end + 1):
         try:
             if file_path.suffix.lower() == '.csv':
-                df = pd.read_csv(file_path, header=i, encoding=encoding, nrows=1)
+                df = pd.read_csv(file_path, header=i,
+                                 encoding=encoding, nrows=1)
             else:
-                df = pd.read_excel(file_path, header=i, engine='openpyxl', nrows=1)
+                df = pd.read_excel(file_path, header=i,
+                                   engine='openpyxl', nrows=1)
             cols_str = ' '.join(df.columns.astype(str))
             if any(kw in cols_str for kw in HEADER_KEYWORDS):
                 logger.debug(f"检测到 header 在第 {i} 行")
@@ -385,7 +390,8 @@ def construct_description(df):
     if '描述_rule' in df.columns:
         df['描述'] = df['描述_rule'].combine_first(df['描述'])
 
-    df['描述'] = df['描述'].astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.strip()
+    df['描述'] = df['描述'].astype(str).str.replace(
+        r'[\r\n]+', ' ', regex=True).str.strip()
     df.loc[df['描述'] == '/', '描述'] = ""
     return df
 
@@ -422,7 +428,8 @@ def load_rules(rule_path: Path):
                 logger.error("规则文件中缺少 'Moze Dict' sheet")
                 return None
             df = pd.read_excel(xl, sheet_name='Moze Dict')
-        df['is_regex'] = pd.to_numeric(df.get('is_regex', 0), errors='coerce').fillna(0)
+        df['is_regex'] = pd.to_numeric(
+            df.get('is_regex', 0), errors='coerce').fillna(0)
         df['商家(old)'] = df['商家(old)'].astype(str).str.strip()
         logger.info(f"已加载 {len(df)} 条规则")
         return df
@@ -439,8 +446,10 @@ def sniff_and_load_data(file_path: Path):
     ftype, df = None, None
     try:
         if file_path.suffix.lower() == '.csv':
-            header = find_header_row(file_path, ALIPAY_HEADER_RANGE, ALIPAY_ENCODING)
-            df = pd.read_csv(file_path, header=header, encoding=ALIPAY_ENCODING)
+            header = find_header_row(
+                file_path, ALIPAY_HEADER_RANGE, ALIPAY_ENCODING)
+            df = pd.read_csv(file_path, header=header,
+                             encoding=ALIPAY_ENCODING)
             ftype = "AliPay"
         elif file_path.suffix.lower() == '.xlsx':
             header = find_header_row(file_path, WECHAT_HEADER_RANGE)
@@ -460,7 +469,8 @@ def sniff_and_load_data(file_path: Path):
             return None
 
         df['金额(元)'] = pd.to_numeric(
-            df['金额(元)'].astype(str).str.replace(r'[¥,]', '', regex=True).str.strip(),
+            df['金额(元)'].astype(str).str.replace(
+                r'[¥,]', '', regex=True).str.strip(),
             errors='coerce'
         ).fillna(0)
         df['金额'] = df['金额(元)']
@@ -583,7 +593,8 @@ def process_generic_keywords(df, sub_col):
     generic_extracted = df['描述'].str.extract(GENERIC_PATTERN, expand=True)
 
     mask_subcat = generic_extracted[0].notna() & (df[sub_col] == "")
-    mask_name = generic_extracted[0].notna() & generic_extracted[0].isin(NAME_KEYWORDS.keys())
+    mask_name = generic_extracted[0].notna(
+    ) & generic_extracted[0].isin(NAME_KEYWORDS.keys())
 
     if mask_subcat.any():
         matched_keys = generic_extracted.loc[mask_subcat, 0]
@@ -623,7 +634,7 @@ def process_generic_keywords(df, sub_col):
 # ==========================================
 
 def _apply_ingredient_patterns(df, sub_col, search_series, main_col,
-                                mask_meal, mask_ingredients_exact):
+                               mask_meal, mask_ingredients_exact):
     """子函数①：依据 INGREDIENT_PRIORITY 匹配食材/商品类别"""
     main_filter = (df[sub_col] == "") | (df[main_col].isin(['购物', '居家', '饮食']))
 
@@ -645,7 +656,8 @@ def _apply_ingredient_patterns(df, sub_col, search_series, main_col,
 
         for exclude_key in exclude_list:
             if exclude_key in PATTERNS:
-                mask &= ~search_series.str.contains(PATTERNS[exclude_key], regex=True)
+                mask &= ~search_series.str.contains(
+                    PATTERNS[exclude_key], regex=True)
 
         if mask.any():
             df.loc[mask, [sub_col, '名称']] = [sub_c, name]
@@ -665,9 +677,11 @@ def _infer_meal_time(df, sub_col, mask_meal, mask_meal_from_memo):
     mask_time_meal = (df[sub_col] == "") & (mask_meal | mask_meal_from_memo)
     if mask_time_meal.any():
         h = df.loc[mask_time_meal, '交易时间'].dt.hour
-        conditions = [(h >= 6) & (h < 11), (h >= 11) & (h < 16), (h >= 16) & (h < 21)]
+        conditions = [(h >= 6) & (h < 11), (h >= 11) &
+                      (h < 16), (h >= 16) & (h < 21)]
         choices = ["早餐", "午餐", "晚餐"]
-        df.loc[mask_time_meal, sub_col] = np.select(conditions, choices, default="夜宵")
+        df.loc[mask_time_meal, sub_col] = np.select(
+            conditions, choices, default="夜宵")
     return df
 
 
@@ -676,9 +690,12 @@ def _map_record_types(df, sub_col, main_col):
     mapped_values = df[sub_col].map(AUTO_MAP_DICT)
     mask_mapped = mapped_values.notna()
     if mask_mapped.any():
-        df.loc[mask_mapped, '记录类型'] = mapped_values[mask_mapped].apply(lambda x: x[0])
-        df.loc[mask_mapped, main_col] = mapped_values[mask_mapped].apply(lambda x: x[1])
-        df.loc[mask_mapped, '项目'] = mapped_values[mask_mapped].apply(lambda x: x[2])
+        df.loc[mask_mapped, '记录类型'] = mapped_values[mask_mapped].apply(
+            lambda x: x[0])
+        df.loc[mask_mapped, main_col] = mapped_values[mask_mapped].apply(
+            lambda x: x[1])
+        df.loc[mask_mapped, '项目'] = mapped_values[mask_mapped].apply(
+            lambda x: x[2])
     return df
 
 
@@ -705,7 +722,8 @@ def process_heuristics(df_in, main_col, sub_col):
     )
 
     mask_meal = search_series.str.contains(PATTERNS['MEAL'], regex=True)
-    mask_ingredients_exact = search_series.str.contains(PATTERNS['INGREDIENTS'], regex=True)
+    mask_ingredients_exact = search_series.str.contains(
+        PATTERNS['INGREDIENTS'], regex=True)
 
     # ① 食材/商品类别匹配
     df = _apply_ingredient_patterns(
@@ -741,7 +759,8 @@ def parse_memo_subcategory(df, main_col, sub_col):
         pattern = rf'^{re.escape(keyword)}(.*)$'
         matches = memo_series.str.match(pattern, na=False)
         if matches.any():
-            extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
+            extracted = memo_series[matches].str.replace(
+                pattern, r'\1', regex=True).str.strip()
             df.loc[matches, '记录类型'] = r_type
             df.loc[matches, main_col] = main_cat
             df.loc[matches, sub_col] = subcat
@@ -751,7 +770,8 @@ def parse_memo_subcategory(df, main_col, sub_col):
     # 正餐特殊处理
     matches = memo_series.str.match(r'^正餐(.*)$', na=False)
     if matches.any():
-        extracted = memo_series[matches].str.replace(r'^正餐(.*)$', r'\1', regex=True).str.strip()
+        extracted = memo_series[matches].str.replace(
+            r'^正餐(.*)$', r'\1', regex=True).str.strip()
         df.loc[matches, '描述'] = extracted
         df.loc[matches, '_is_meal_from_memo'] = True
         memo_series = memo_series.where(~matches, '')
@@ -766,7 +786,8 @@ def parse_memo_subcategory(df, main_col, sub_col):
             continue
 
         r_type, main_cat, proj = AUTO_MAP_DICT[subcat]
-        extracted = memo_series[matches].str.replace(pattern, r'\1', regex=True).str.strip()
+        extracted = memo_series[matches].str.replace(
+            pattern, r'\1', regex=True).str.strip()
         df.loc[matches, '记录类型'] = r_type
         df.loc[matches, main_col] = main_cat
         df.loc[matches, sub_col] = subcat
@@ -780,12 +801,14 @@ def parse_memo_subcategory(df, main_col, sub_col):
                 dot_content = extracted.loc[dot_indices]
                 split_df = dot_content.str.split('.', n=1, expand=True)
                 obj_values = split_df[0].str.strip()
-                desc_values = split_df[1].str.strip() if 1 in split_df.columns else pd.Series('', index=dot_indices)
+                desc_values = split_df[1].str.strip(
+                ) if 1 in split_df.columns else pd.Series('', index=dot_indices)
                 empty_obj_mask = (obj_values == '') | obj_values.isna()
                 if empty_obj_mask.any():
                     obj_values = obj_values.where(
                         ~empty_obj_mask,
-                        dot_content.str.replace('.', '', regex=False).str.strip()
+                        dot_content.str.replace(
+                            '.', '', regex=False).str.strip()
                     )
                     desc_values = desc_values.where(~empty_obj_mask, '')
                 df.loc[dot_indices, '对象'] = obj_values.values
@@ -806,7 +829,8 @@ def parse_memo_subcategory(df, main_col, sub_col):
 def apply_rules(df, df_rules, main_col, sub_col):
     """应用字典规则匹配，添加正则异常处理"""
     df['商家(old)'] = df.get('交易对方', pd.NA).astype(str).str.strip()
-    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in ['商家(old)', 'is_regex']}
+    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in [
+        '商家(old)', 'is_regex']}
 
     df = pd.merge(
         df,
@@ -817,7 +841,8 @@ def apply_rules(df, df_rules, main_col, sub_col):
     df.reset_index(drop=True, inplace=True)
 
     rule_col_check = f"{main_col}_rule"
-    uncat_mask = df[rule_col_check].isna() if rule_col_check in df.columns else pd.Series(True, index=df.index)
+    uncat_mask = df[rule_col_check].isna(
+    ) if rule_col_check in df.columns else pd.Series(True, index=df.index)
 
     if uncat_mask.any():
         regex_rules = df_rules[df_rules['is_regex'] == 1]
@@ -827,7 +852,8 @@ def apply_rules(df, df_rules, main_col, sub_col):
                 if to_match.empty:
                     break
                 try:
-                    match_mask = to_match.str.contains(r['商家(old)'], regex=True, na=False)
+                    match_mask = to_match.str.contains(
+                        r['商家(old)'], regex=True, na=False)
                     match_indices = to_match[match_mask].index
                     if not match_indices.empty:
                         for c, rc in rename_map.items():
@@ -846,7 +872,8 @@ def apply_rules(df, df_rules, main_col, sub_col):
 
 def finalize_records(df, main_col, sub_col):
     """最终处理：金额符号、日期时间、账户等"""
-    mask_neg = (df['记录类型'].isin(['支出', '应付款项', '应收款项'])) & (df.get('收/支') == '支出')
+    mask_neg = (df['记录类型'].isin(['支出', '应付款项', '应收款项'])) & (
+        df.get('收/支') == '支出')
     df.loc[mask_neg, '金额'] *= -1
 
     mask_borrow = df[sub_col] == '借入'
@@ -888,9 +915,11 @@ def process_main(df_in, df_rules, main_col, sub_col):
     # 自动推断空白的收/支列
     if '备注' in df.columns:
         memo = df['备注'].astype(str).str.strip()
-        mask_empty_inout = df['收/支'].fillna('').astype(str).str.strip().isin(['', 'nan', 'NaN', 'None'])
+        mask_empty_inout = df['收/支'].fillna('').astype(
+            str).str.strip().isin(['', 'nan', 'NaN', 'None'])
 
-        mask_borrow_in = mask_empty_inout & memo.str.contains(r'^借入', na=False, regex=True)
+        mask_borrow_in = mask_empty_inout & memo.str.contains(
+            r'^借入', na=False, regex=True)
         if mask_borrow_in.any():
             df.loc[mask_borrow_in, '收/支'] = '收入'
 
@@ -905,8 +934,10 @@ def process_main(df_in, df_rules, main_col, sub_col):
             df.loc[mask_reim, '收/支'] = '支出'
 
         # [v11.74] 使用模块级预编译模式
-        mask_subcat = mask_empty_inout & memo.str.contains(INFER_SUBCAT_PATTERN, na=False)
-        mask_name_kw = mask_empty_inout & memo.str.contains(INFER_NAME_PATTERN, na=False)
+        mask_subcat = mask_empty_inout & memo.str.contains(
+            INFER_SUBCAT_PATTERN, na=False)
+        mask_name_kw = mask_empty_inout & memo.str.contains(
+            INFER_NAME_PATTERN, na=False)
         if mask_subcat.any():
             df.loc[mask_subcat, '收/支'] = '支出'
         if mask_name_kw.any():
@@ -914,7 +945,8 @@ def process_main(df_in, df_rules, main_col, sub_col):
 
     memo_series = df['备注'].astype(str).str.strip()
     # [v11.74] 使用模块级 ALL_SPECIAL_PATTERN，无需重建
-    mask_has_special_keyword = memo_series.str.contains(ALL_SPECIAL_PATTERN, na=False)
+    mask_has_special_keyword = memo_series.str.contains(
+        ALL_SPECIAL_PATTERN, na=False)
     df = df[(df["收/支"] == "支出") | mask_has_special_keyword].copy()
 
     if df.empty:
@@ -924,7 +956,8 @@ def process_main(df_in, df_rules, main_col, sub_col):
 
     # [v11.74] ensure_columns 只在此处调用一次
     df = ensure_columns(df, main_col, sub_col)
-    df['支付方式'] = df['支付方式'].astype(str).replace(STANDARDIZE_ACCOUNTS, regex=True)
+    df['支付方式'] = df['支付方式'].astype(str).replace(
+        STANDARDIZE_ACCOUNTS, regex=True)
 
     df = apply_rules(df, df_rules, main_col, sub_col)
 
@@ -986,11 +1019,13 @@ def save_result(df, cols):
     """保存结果"""
     if '标签' in df.columns:
         m = ~df['记录类型'].isin(['转入', '转出'])
-        df.loc[m, '标签'] = (df.loc[m, '标签'].fillna("") + " " + df.loc[m, '_source_tag']).str.strip()
+        df.loc[m, '标签'] = (df.loc[m, '标签'].fillna(
+            "") + " " + df.loc[m, '_source_tag']).str.strip()
 
     type_priority = {'转出': 0, '转入': 1}
     df['_Type_Rank'] = df['记录类型'].map(type_priority).fillna(0)
-    df.sort_values(['_Sort_Date', '_Type_Rank'], ascending=[False, True], inplace=True)
+    df.sort_values(['_Sort_Date', '_Type_Rank'],
+                   ascending=[False, True], inplace=True)
 
     if not TARGET_DIR.exists():
         TARGET_DIR.mkdir(parents=True, exist_ok=True)
@@ -1017,7 +1052,8 @@ def main():
             input("按 Enter 退出")
             return
 
-        cols = [c for c in df_rules.columns if c not in ['商家(old)', 'is_regex']]
+        cols = [c for c in df_rules.columns if c not in [
+            '商家(old)', 'is_regex']]
         main_col = next((c for c in cols if "主类" in c), None)
         sub_col = next((c for c in cols if "子类" in c), None)
         if not main_col:
@@ -1053,9 +1089,11 @@ def main():
 
         res_dfs = []
         if mask_trans.any():
-            res_dfs.append(process_transfers(df_raw[mask_trans].copy(), main_col, sub_col))
+            res_dfs.append(process_transfers(
+                df_raw[mask_trans].copy(), main_col, sub_col))
         if (~mask_trans).any():
-            res_dfs.append(process_main(df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
+            res_dfs.append(process_main(
+                df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
 
         if not res_dfs:
             logger.warning("无结果")
@@ -1070,8 +1108,10 @@ def main():
         print(f"\n{BColors.OKGREEN}✅ 成功! 文件: {path}{BColors.ENDC}")
 
         checks = [
-            ('支出/收入/转账', df_final['记录类型'].isin(['支出', '收入', '转入', '转出']), [main_col, sub_col]),
-            ('应收/应付', df_final['记录类型'].isin(['应收款项', '应付款项']), [main_col, sub_col, '对象'])
+            ('支出/收入/转账', df_final['记录类型'].isin(['支出',
+             '收入', '转入', '转出']), [main_col, sub_col]),
+            ('应收/应付', df_final['记录类型'].isin(['应收款项', '应付款项']),
+             [main_col, sub_col, '对象'])
         ]
 
         has_issues = False
@@ -1079,9 +1119,11 @@ def main():
             bad = mask & df_final[check_cols].isin(["", pd.NA]).any(axis=1)
             if bad.any():
                 has_issues = True
-                print(f"{BColors.FAIL}[!] {bad.sum()} 条【{name}】记录缺失关键信息:{BColors.ENDC}")
+                print(
+                    f"{BColors.FAIL}[!] {bad.sum()} 条【{name}】记录缺失关键信息:{BColors.ENDC}")
                 display_cols = ['日期', '商家', '金额', '描述'] + check_cols
-                print(df_final.loc[bad, display_cols].fillna('').head(5).to_string(index=True))
+                print(df_final.loc[bad, display_cols].fillna(
+                    '').head(5).to_string(index=True))
 
         if not has_issues:
             print(f"{BColors.OKGREEN}✅ 数据验证通过{BColors.ENDC}")
