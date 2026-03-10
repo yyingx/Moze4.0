@@ -1,24 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-Moze 导入脚本 v11.74 (Refactored)
+Moze 导入脚本 v11.75 (Income Keep Fix)
 Created on Sun Jan 05 2026
 Enhanced: Sat Feb 01 2026
 Refactored: Mon Mar 02 2026
+Fixed: Tue Mar 10 2026
 
 @author: TZY_YX
 
-基于 v11.73，重构优化：
-[优化] 消除 process_main 中的重复常量定义，统一提升至模块级
-[优化] 拆分 process_heuristics 为三个职责单一的子函数
-[优化] ensure_columns 调用收敛，只在 process_main 入口处执行一次
-[优化] 预计算 ALL_SPECIAL_PATTERN 为模块级常量，避免每次调用重建
-[保留] 所有业务逻辑与 v11.73 完全一致
+基于 v11.74，合并 Trae 版 bug fix：
+[修复] 收入记录被错误过滤 → process_main 过滤行改为保留收入
+[修复] 收入类备注关键词（薪资/福利补贴等）无法自动推断收/支 → 新增 INFER_INCOME_PATTERN
+[保留] v11.74 所有重构优化（子函数拆分、模块级预编译常量等）
 """
 
 # === 版本信息 ===
-__version__ = '11.74'
+__version__ = '11.75'
 __author__ = 'TZY_YX'
-__updated__ = '2026-03-02'
+__updated__ = '2026-03-10'
 
 import numpy as np
 import pandas as pd
@@ -337,6 +336,11 @@ INFER_SUBCAT_PATTERN = re.compile(
     rf"^(?:{'|'.join(map(re.escape, _INFER_EXPENSE_SUBCAT_KEYS))})")
 INFER_NAME_PATTERN = re.compile(
     rf"^(?:{'|'.join(map(re.escape, NAME_KEYWORDS.keys()))})")
+
+# [v11.75] 收入类备注关键词推断模式
+_INCOME_KEYWORDS = {'薪资', '福利补贴', '年终奖', '收红包', '利息收入', '投资盈利', '二手折旧', '其他收入'}
+INFER_INCOME_PATTERN = re.compile(
+    rf"^(?:{'|'.join(map(re.escape, _INCOME_KEYWORDS))})")
 
 
 # ==========================================
@@ -944,11 +948,20 @@ def process_main(df_in, df_rules, main_col, sub_col):
         if mask_name_kw.any():
             df.loc[mask_name_kw, '收/支'] = '支出'
 
+        # [v11.75] 收入类备注关键词自动推断为收入
+        mask_income = mask_empty_inout & memo.str.contains(
+            INFER_INCOME_PATTERN, na=False)
+        if mask_income.any():
+            df.loc[mask_income, '收/支'] = '收入'
+
     memo_series = df['备注'].astype(str).str.strip()
     # [v11.74] 使用模块级 ALL_SPECIAL_PATTERN，无需重建
     mask_has_special_keyword = memo_series.str.contains(
         ALL_SPECIAL_PATTERN, na=False)
-    df = df[(df["收/支"] == "支出") | mask_has_special_keyword].copy()
+    # [v11.75] 收入只保留备注命中收入关键词的记录，避免大量未分类收入混入
+    mask_income_with_keyword = (df["收/支"] == "收入") & memo_series.str.contains(
+        INFER_INCOME_PATTERN, na=False)
+    df = df[(df["收/支"] == "支出") | mask_income_with_keyword | mask_has_special_keyword].copy()
 
     if df.empty:
         return pd.DataFrame()
@@ -1041,7 +1054,7 @@ def main():
     """主函数"""
     print(f"{BColors.BOLD}{BColors.CYAN}")
     print("=" * 50)
-    print(f"  Moze 导入脚本 v{__version__} (Refactored)")
+    print(f"  Moze 导入脚本 v{__version__} (Income Keep Fix)")
     print(f"  作者: {__author__} | 更新: {__updated__}")
     print("=" * 50)
     print(f"{BColors.ENDC}")
