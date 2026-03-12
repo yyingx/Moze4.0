@@ -1,30 +1,23 @@
-# -*- coding: utf-8 -*-
 """
-Created on Wed Dec 31 17:20:44 2025
-
+Moze 导入脚本 v11.39 (Prefix Fix & Auto-Close)
+Created on Sun Jan 05 2026
 @author: TZY_YX
 """
 
-# -*- coding: utf-8 -*-
-"""
-Moze 导入脚本 v11.37 (优化修复版)
-Created on Wed Dec 31 15:13:00 2025
-@author: TZY_YX
-"""
+# ==========================================
+#      配置与常量定义
+# ==========================================
 
 import datetime
 import re
 import traceback
 import tkinter as tk
+import time  # 引入 time 模块用于计时和延时
 from tkinter import filedialog, simpledialog
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
-# ==========================================
-#      配置与常量定义
-# ==========================================
 
 class BColors:
     """终端输出颜色代码"""
@@ -33,6 +26,7 @@ class BColors:
     FAIL = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
+
 
 # --- 路径设置 ---
 # 自动检测当前脚本所在目录
@@ -44,7 +38,8 @@ POSSIBLE_PATHS = [
     Path(r"E:\天之逸2025\Moze4.0\Moze Dict.xlsx")
 ]
 
-RULE_BOOK_PATH = next((p for p in POSSIBLE_PATHS if p.exists()), CURRENT_DIR / "Moze Dict.xlsx")
+RULE_BOOK_PATH = next(
+    (p for p in POSSIBLE_PATHS if p.exists()), CURRENT_DIR / "Moze Dict.xlsx")
 TARGET_DIR = CURRENT_DIR / "Moze4.0_Import"
 
 # --- 核心配置 ---
@@ -52,8 +47,8 @@ CONFIG = {
     'TRANSFER_TARGET_1': '肖恩',
     'TRANSFER_TARGET_2': '工商银行(9579)',
     'KEYWORD_CHARGING': '自助服务-充电桩',
-    'KEYWORD_ALIPAY_CSV': '支付宝支付科技有限公司',
-    'KEYWORD_WECHAT_XLSX': '微信支付账单明细',
+    # 'KEYWORD_ALIPAY_CSV': '支付宝支付科技有限公司',
+    # 'KEYWORD_WECHAT_XLSX': '微信支付账单明细',
 }
 
 # --- 账户标准化映射 (根据你的常用账户简化) ---
@@ -68,74 +63,99 @@ STANDARDIZE_ACCOUNTS = {
 # --- 数据源定义 ---
 DATA_SOURCE = {
     'FRUIT': [
-        "水果", "果园", "果蔬", "百果园", "鲜果", "果业", "苹果", "香蕉", "红枣", "大枣",
-        "桃子", "水蜜桃", "樱桃", "黄桃", "香梨", "雪梨", "柑橘", "沃柑", "草莓", "甘蔗",
-        "桔子", "沙糖桔", "葡萄", "西瓜", "柚子", "柠檬", "橙子", "菠萝", "榴莲", "山竹",
-        "蓝莓", "荔枝", "龙眼", "哈密瓜", "椰子", "柿子", "杨梅", "李子", "芒果", "猕猴桃",
-        "火龙果", "百香果", "莲雾", "车厘子", "菠萝蜜", "桑葚", "枇杷", "杨桃", "无花果",
-        "圣女果", "小番茄", "姑娘果", "西梅", "青枣", "冬枣", "黑布林", "人参果", "丑八怪",
-        "耙耙柑"
+        "水果",
+        "果园", "果蔬", "百果园", "鲜果", "果业", "苹果", "香蕉", "红枣", "大枣", "桃子", "水蜜桃",
+        "樱桃", "黄桃", "香梨", "雪梨", "柑橘", "沃柑", "草莓", "甘蔗", "桔子", "沙糖桔", "葡萄",
+        "西瓜", "柚子", "柠檬", "橙子", "菠萝", "榴莲", "山竹", "蓝莓", "荔枝", "龙眼", "哈密瓜",
+        "椰子", "柿子", "杨梅", "李子", "芒果", "猕猴桃", "火龙果", "百香果", "莲雾", "车厘子",
+        "菠萝蜜", "桑葚", "枇杷", "杨桃", "无花果", "圣女果", "小番茄", "姑娘果",
+        "西梅", "青枣", "冬枣", "黑布林", "人参果", "丑八怪", "耙耙柑"
     ],
     'DRINK': [
-        "饮料", "可乐", "红牛", "奶茶", "东鹏", "果汁", "椰汁", "酸奶", "咖啡", "拿铁",
-        "乐虎", "AD钙奶", "甜酒汁"
+        "饮料",
+        "可乐", "红牛", "奶茶", "东鹏", "果汁", "椰汁", "酸奶", "咖啡", "拿铁", "乐虎", "AD钙奶", "甜酒汁"
     ],
-    'WATER': ["纯净水", "矿泉水", "农夫山泉", "怡宝", "百岁山", "娃哈哈", "今麦郎"],
+    'WATER': [
+        "纯净水",
+        "矿泉水", "农夫山泉", "怡宝", "百岁山", "娃哈哈", "今麦郎"
+    ],
     'SOFTWARE': ["软件", "APP", "应用", "安卓"],
     'CHARGING': [
         "特来电", "星星充电", "小桔充电", "国家电网", "电费", "充电",
         "e充电", "云快充", "蔚来", "特斯拉", "超充"
     ],
     'VEGETABLE': [
-        "蔬菜", "白菜", "菠菜", "上海青", "油麦菜", "生菜", "娃娃菜", "空心菜", "苋菜",
-        "菜芯", "韭菜", "香菜", "芹菜", "荠菜", "芥蓝", "土豆", "胡萝卜", "白萝卜",
-        "青萝卜", "红薯", "紫薯", "山药", "芋头", "莲藕", "藕", "洋葱", "大蒜", "生姜",
-        "竹笋", "芦笋", "茭白", "西红柿", "茄子", "黄瓜", "西葫芦", "南瓜", "冬瓜",
-        "苦瓜", "丝瓜", "青椒", "彩椒", "尖椒", "秋葵", "玉米", "四季豆", "豇豆",
-        "扁豆", "荷兰豆", "毛豆", "豌豆", "蚕豆", "刀豆", "香菇", "金针菇", "平菇",
-        "杏鲍菇", "口蘑", "木耳", "银耳", "茶树菇", "猴头菇", "大葱", "小葱", "蒜苗", "蒜苔"
+        "蔬菜",
+        # 叶菜类
+        "白菜", "菠菜", "上海青", "油麦菜", "生菜", "娃娃菜", "空心菜", "苋菜", "菜芯",
+        "韭菜", "香菜", "芹菜", "荠菜", "芥蓝",
+        # 根茎类
+        "土豆", "胡萝卜", "白萝卜", "青萝卜", "红薯", "紫薯", "山药", "芋头", "莲藕", "藕",
+        "洋葱", "大蒜", "生姜", "竹笋", "芦笋", "茭白",
+        # 茄果/瓜果类
+        "西红柿", "茄子", "黄瓜", "西葫芦", "南瓜", "冬瓜", "苦瓜", "丝瓜", "青椒", "彩椒",
+        "尖椒", "秋葵", "玉米",
+        # 豆类
+        "四季豆", "豇豆", "扁豆", "荷兰豆", "毛豆", "豌豆", "蚕豆", "刀豆",
+        # 菌菇类
+        "香菇", "金针菇", "平菇", "杏鲍菇", "口蘑", "木耳", "银耳", "茶树菇", "猴头菇",
+        # 葱姜蒜/调味菜
+        "大葱", "小葱", "蒜苗", "蒜苔"
     ],
-    'Snack': ["零食", "切糕", "蛋糕", "面包", "腰果"],
+    'Snack': [
+        "零食",
+        "切糕", "蛋糕", "面包", "腰果"
+    ],
     'BEAN_PRODUCT': [
-        "豆腐", "豆皮", "腐竹", "豆干", "豆腐泡", "千张", "豆卷", "腐皮", "油豆皮",
-        "内脂豆腐", "老豆腐", "嫩豆腐", "冻豆腐", "响铃卷", "素鸡"
+        "豆腐", "豆皮", "腐竹", "豆干", "豆腐泡", "千张", "豆卷", "腐皮", "油豆皮", "内脂豆腐",
+        "老豆腐", "嫩豆腐", "冻豆腐", "响铃卷", "素鸡"
     ],
     'INGREDIENTS': [
-        "食材", "馒头", "火腿", "腊肠", "榨菜", "老干妈", "杂酱", "生水饺", "酱料",
-        "炸酱", "白砂糖", "蒸肉粉", "火锅底料", "食用盐", "生抽", "老抽", "耗油",
-        "料酒", "胡椒粉", "辣椒粉", "辣椒酱", "鲜面条", "干面条", "挂面", "红豆",
-        "绿豆", "黄豆", "花生米"
+        "食材",
+        "馒头", "火腿", "腊肠", "榨菜", "老干妈", "杂酱", "生水饺", "酱料", "炸酱", "白砂糖",
+        "蒸肉粉", "火锅底料", "食用盐", "生抽", "老抽", "耗油", "料酒", "胡椒粉", "辣椒粉",
+        "辣椒酱", "鲜面条", "干面条", "挂面", "红豆", "绿豆", "黄豆"
     ],
     'PORK': [
-        "猪肉", "扇子骨", "板油", "五花肉", "梅花肉", "瘦肉", "猪蹄膀", "蹄膀", "排骨",
-        "脊骨", "五花", "前蹄", "大肠", "筒子骨", "棒骨", "猪油", "猪蹄", "鲜肉"
+        "猪肉", "扇子骨", "板油", "五花肉", "梅花肉", "瘦肉", "猪蹄膀", "蹄膀", "排骨", "脊骨",
+        "五花", "前蹄", "大肠", "筒子骨", "棒骨", "猪油", "猪蹄", "荤油", "鲜肉"
     ],
     'POULTRY': ["三黄鸡", "鸡腿", "鸡翅", "鸡胸肉", "老母鸡", "乌鸡", "鸭肉", "鸭腿", "鸭翅", "鸭架", "老鸭"],
     'BEEF_MUTTON': ["牛肉", "牛腩", "牛排", "牛柳", "牛腱", "肥牛", "羊肉", "羊排", "羊腿"],
     'SEAFOOD': [
-        "鱼", "虾", "蟹", "贝", "带鱼", "黄鱼", "鲈鱼", "鲫鱼", "草鱼", "基围虾",
-        "皮皮虾", "大闸蟹", "生蚝", "鱿鱼", "章鱼", "海带", "紫菜"
+        "鱼", "虾", "蟹", "贝", "带鱼", "黄鱼", "鲈鱼", "鲫鱼", "草鱼", "基围虾", "皮皮虾",
+        "大闸蟹", "生蚝", "鱿鱼", "章鱼", "海带", "紫菜"
     ],
     'Eggs': ["鸡蛋", "土鸡蛋", "生咸鸭蛋", "皮蛋"],
     'COOKED': [
-        "熟食", "水煮花生", "毛豆", "藕夹", "茄盒", "锅包肉", "猪头肉", "卤菜", "凉菜",
-        "烧鸡", "烤鸭", "酱牛肉", "熏鱼", "炸带鱼", "炸鱿鱼", "肉丸", "墨鱼丸", "牛肉丸",
-        "鱼丸", "虾滑", "贡丸", "鱿鱼圈", "糍粑", "熟咸鸭蛋", "熟肉肠", "糯米制品", "铁板鸭"
+        "熟食", "水煮花生", "花生米", "毛豆", "藕夹", "茄盒", "锅包肉", "猪头肉", "卤菜", "凉菜", "烧鸡",
+        "烤鸭", "酱牛肉", "熏鱼", "炸带鱼", "炸鱿鱼", "肉丸", "墨鱼丸", "牛肉丸", "鱼丸", "虾滑",
+        "贡丸", "鱿鱼圈", "糍粑", "熟咸鸭蛋", "熟肉肠", "糯米制品", "铁板鸭"
     ],
     'RICE': ["大米", "五常"],
     'MEAL': [
-        "正餐", "东苑一层", "东苑二层", "西区食堂", "外勤", "三镇民生", "永和四喜", "老乡鸡",
-        "黄蜀郎", "麦香园", "丝路", "兰州", "沙县", "长沙臭豆腐", "重庆小面", "麻辣香锅",
-        "麻辣烫", "鸡公煲", "猪脚饭", "卤肉饭", "盖浇饭", "炒饭", "快餐", "小碗菜", "热干面",
-        "太和板面", "板面", "油泼面", "牛肉面", "刀削面", "牛杂粉", "肠粉", "牛肉汤", "水煎包",
-        "小笼包", "汽水包", "煎豆折", "鸡蛋饼", "包粑", "煎包", "煎饼", "烧饼", "锅盔",
-        "肉夹馍", "馕", "水饺", "蒸饺", "混沌", "馄饨", "包子", "小面", "烧烤", "路边摊",
-        "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆"
+        "正餐",
+        # 1. 地点/校区
+        "东苑一层", "东苑二层", "西区食堂", "外勤",
+        # 2. 连锁品牌
+        "三镇民生", "永和四喜", "老乡鸡", "黄蜀郎", "麦香园", "丝路",
+        # 3. 强特征的风味/地域
+        "兰州", "沙县", "长沙臭豆腐", "重庆小面",
+        # 4. 具体餐品 - 饭/面/粉/锅
+        "麻辣香锅", "麻辣烫", "鸡公煲", "猪脚饭", "卤肉饭", "盖浇饭", "炒饭", "快餐", "小碗菜",
+        "热干面", "太和板面", "板面", "油泼面", "牛肉面", "刀削面", "牛杂粉", "肠粉", "牛肉汤", "汤粉",
+        # 5. 具体餐品 - 面点/早餐/小吃
+        "水煎包", "小笼包", "汽水包", "煎豆折", "鸡蛋饼", "包粑",
+        "煎包", "煎饼", "烧饼", "锅盔", "肉夹馍", "馕",
+        "水饺", "蒸饺", "混沌", "馄饨", "包子", "小面",
+        # 6. 通用场景/店名
+        "烧烤", "路边摊", "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆"
     ],
     'Parking_fee': ["WF7023"],
     'DAILY_NECESSITIES': [
-        "日用", "抽纸", "卷纸", "厨房纸", "垃圾袋", "保鲜袋", "保鲜膜", "洗衣液", "洗洁精",
-        "牙膏", "洗发水", "一次性手套", "一次性杯", "棉签"
+        "日用",
+        "抽纸", "卷纸", "厨房纸", "垃圾袋", "保鲜袋", "保鲜膜", "洗衣液", "洗洁精", "牙膏",
+        "洗发水", "一次性手套", "一次性杯", "棉签"
     ],
     'Clothing_Shoes_Bags': ["袜子", "内裤", "帽子", "手套", "鞋", "T恤", "裤", "外套", "修裤脚"],
     'Adult_Products': ["避孕套", "成人润滑剂", "安全套"],
@@ -165,7 +185,7 @@ INGREDIENT_PRIORITY = [
 # (记录类型, 主类, 项目)
 RAW_MAPPING_CONFIG = {
     ('支出', '饮食', '食'): ['午餐', '夜宵', '早餐', '晚餐', '纯净水', '零食', '食材', '饮料水果'],
-    ('支出', '购物', '日用&家用'): ['家具家纺', '数码电器', '日常用品', '服饰鞋包'],
+    ('支出', '购物', '日用&家用'): ['家具家纺', '数码电器', '日常用品', '服饰鞋包', '大件'],
     ('支出', '交通', '通信&交通'): ['公共交通', '共享交通', '出租车', '汽车', '火车', '加油充电'],
     ('支出', '居家', '日用&家用'): ['快递邮政', '物业费', '理发'],
     ('支出', '居家', '通信&交通'): ['电话费'],
@@ -190,12 +210,13 @@ RAW_MAPPING_CONFIG = {
     ('应付款项', '应付款项', ''): ['借入']
 }
 
-PATTERNS = {k: r"(?:" + "|".join(map(re.escape, v)) + ")" for k, v in DATA_SOURCE.items()}
+PATTERNS = {k: r"(?:" + "|".join(map(re.escape, v)) +
+            ")" for k, v in DATA_SOURCE.items()}
 
 AUTO_MAP_DICT = {}
-for (r_type, main, proj), sub_list in RAW_MAPPING_CONFIG.items():
+for (r_type, main_cat, proj), sub_list in RAW_MAPPING_CONFIG.items():
     for sub in sub_list:
-        AUTO_MAP_DICT[sub] = (r_type, main, proj)
+        AUTO_MAP_DICT[sub] = (r_type, main_cat, proj)
 
 COLUMN_MAPPING = {
     '交易时间': '交易时间',
@@ -226,10 +247,11 @@ COLUMN_MAPPING = {
 #          [核心] 逻辑处理函数
 # ==========================================
 
+
 def construct_description(df):
     """构建初始描述：备注 > 字典规则 > 淘宝商品名"""
     df['描述'] = ""
-    mask_tb = (df.get('商家', '') == '淘宝')
+    mask_tb = df.get('商家', '') == '淘宝'
     if mask_tb.any():
         df.loc[mask_tb, '描述'] = df.loc[mask_tb, '商品'].fillna("").astype(str)
 
@@ -240,25 +262,62 @@ def construct_description(df):
     if '描述_rule' in df.columns:
         df['描述'] = df['描述_rule'].combine_first(df['描述'])
 
-    df['描述'] = df['描述'].astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.strip()
+    df['描述'] = df['描述'].astype(str).str.replace(
+        r'[\r\n]+', ' ', regex=True).str.strip()
     df.loc[df['描述'] == '/', '描述'] = ""
     return df
 
+
 def clean_final_description(df):
-    """最终清洗：去前缀 & 去冗余词 (放在分类后执行)"""
-    trigger_words = ["日用", "水果", "蔬菜", "饮料", "零食", "食材", "熟食", "正餐"]
+    """
+    最终清洗：去前缀 & 去冗余词
+    范围扩大：包含所有[子类] + [Name名称] + [Meal餐饮关键词]
+    """
+    
+    # 1. --- 聚合所有触发词 (Trigger Words) ---
+    triggers = set()
 
-    # 1. 去前缀
-    keywords_regex = "|".join(trigger_words)
+    # (A) 所有子类 (Sub-categories)
+    triggers.update(AUTO_MAP_DICT.keys())
+
+    # (B) 所有餐饮关键词 (Meal)
+    # if 'MEAL' in DATA_SOURCE:
+    #     triggers.update(DATA_SOURCE['MEAL'])
+
+    # (C) 所有名称 (Name)
+    # 来源 1：从 INGREDIENT_PRIORITY 提取
+    triggers.update([x[1] for x in INGREDIENT_PRIORITY if x[1]])
+    
+    # 来源 2：常见手动名称
+    manual_names = [
+        "水果", "饮料", "纯净水", "充电", "加油充电", 
+        "Software", "停车费", "日用", "正餐", "零食"
+    ]
+    triggers.update(manual_names)
+
+    # 2. --- 预处理列表 ---
+    # 移除空字符串和纯数字
+    trigger_list = [w for w in triggers if w and not str(w).isdigit()]
+    
+    # 【核心】按长度倒序排列，防止短词误伤长词
+    trigger_list.sort(key=len, reverse=True)
+
+    # 3. --- 执行清洗 ---
+    
+    # [操作 A] 去前缀
+    keywords_regex = "|".join(map(re.escape, trigger_list))
     prefix_pat = rf"^(?:{keywords_regex})[. 。\s-]+(.*)"
-    df['描述'] = df['描述'].astype(str).str.replace(prefix_pat, r'\1', regex=True).str.strip()
+    
+    df['描述'] = df['描述'].astype(str).str.replace(
+        prefix_pat, r'\1', regex=True).str.strip()
 
-    # 2. 去冗余
-    mask_redundant = df['描述'].isin(trigger_words) | (df['描述'] == "")
+    # [操作 B] 去完全冗余
+    mask_redundant = df['描述'].isin(trigger_list) | (df['描述'] == "")
     if mask_redundant.any():
         df.loc[mask_redundant, '描述'] = ""
 
     return df
+
 
 def robust_date_converter(x):
     """健壮的日期转换"""
@@ -270,6 +329,7 @@ def robust_date_converter(x):
         return pd.to_datetime(x, errors='coerce')
     except Exception:
         return pd.NaT
+
 
 def load_settings(rule_path: Path):
     """加载配置文件"""
@@ -285,25 +345,29 @@ def load_settings(rule_path: Path):
     except Exception:
         pass
 
+
 def load_rules(rule_path: Path):
-    """加载规则"""
-    print("正在加载商家映射规则...", flush=True)
+    """加载规则（极简版：指定读取 'Moze Dict' 表，防占用）"""
+    print("正在加载规则...", flush=True)
     try:
-        xl = pd.ExcelFile(rule_path, engine='openpyxl')
-        s_name = next(
-            (s for s in xl.sheet_names
-             if s.lower() != 'settings' and
-             '商家(old)' in pd.read_excel(rule_path, sheet_name=s, nrows=1).columns),
-            None
-        )
-        if not s_name:
-            return None
-        df = pd.read_excel(rule_path, sheet_name=s_name, engine='openpyxl')
+        # 使用 with 瞬间开关文件，解决 Excel 占用报错
+        with pd.ExcelFile(rule_path, engine='openpyxl') as xl:
+            df = pd.read_excel(xl, sheet_name='Moze Dict')
+
+        # 基础格式清洗
         df['is_regex'] = pd.to_numeric(df.get('is_regex', 0), errors='coerce').fillna(0)
         df['商家(old)'] = df['商家(old)'].astype(str).str.strip()
+
+        print(f"  已加载 {len(df)} 条规则")
         return df
-    except Exception:
+
+    except PermissionError:
+        print(f"  {BColors.FAIL}失败：文件被 Excel 占用，请先关闭文件！{BColors.ENDC}")
         return None
+    except Exception as e:
+        print(f"  加载失败: {e}")
+        return None
+
 
 def sniff_and_load_data(file_path: Path):
     """嗅探并加载数据"""
@@ -329,7 +393,8 @@ def sniff_and_load_data(file_path: Path):
                     else:
                         header_row = 24
 
-                    df = pd.read_csv(file_path, header=header_row, encoding=enc)
+                    df = pd.read_csv(
+                        file_path, header=header_row, encoding=enc)
                     ftype = "AliPay"
                     print(f"  (支付宝: {enc}, 表头锁定第 {header_row+1} 行)")
                     break
@@ -354,7 +419,7 @@ def sniff_and_load_data(file_path: Path):
 
         df.columns = df.columns.astype(str).str.strip().str.replace(
             '（', '(', regex=False).str.replace('）', ')', regex=False
-        )
+                                               )
         df.rename(columns=COLUMN_MAPPING, inplace=True)
 
         if '金额(元)' not in df.columns:
@@ -375,6 +440,7 @@ def sniff_and_load_data(file_path: Path):
         print(f"  加载未知错误: {e}")
         return None
 
+
 def ensure_columns(df, main_col, sub_col):
     """确保必要的列存在"""
     cols_to_check = [
@@ -390,6 +456,7 @@ def ensure_columns(df, main_col, sub_col):
         df[c] = df[c].fillna("")
     return df
 
+
 def process_transfers(df, main_col, sub_col):
     """处理转账 (双向生成)"""
     res = []
@@ -399,31 +466,31 @@ def process_transfers(df, main_col, sub_col):
         if sub_df.empty:
             return
         o_rec, i_rec = sub_df.copy(), sub_df.copy()
-        
+
         # 构建转出记录
         o_rec['金额'] = pd.to_numeric(o_rec['金额(元)']) * -1
         o_rec['记录类型'] = '转出'
         o_rec['账户'] = out_a
         o_rec[sub_col] = sub_val
-        
+
         # 构建转入记录
         i_rec['金额'] = pd.to_numeric(i_rec['金额(元)'])
         i_rec['记录类型'] = '转入'
         i_rec['账户'] = in_a
         i_rec[sub_col] = sub_val
-        
+
         res.extend([o_rec, i_rec])
 
     # 逻辑：Target1 视为零钱3与零钱2的互转
     add_pair(df[(df["交易对方"] == t1) & (df["收/支"] == "收入")], '零钱2', '零钱3')
     add_pair(df[(df["交易对方"] == t1) & (df["收/支"] == "支出")], '零钱3', '零钱2')
-    
+
     # 逻辑：Target2 视为提现到工行
     add_pair(df[df["交易对方"] == t2], '零钱3', '工商银行', '提现')
 
     if not res:
         return pd.DataFrame()
-    
+
     ret = pd.concat(res)
     ret = ensure_columns(ret, main_col, sub_col)
     ret[main_col] = "转账"
@@ -432,6 +499,7 @@ def process_transfers(df, main_col, sub_col):
     ret['_Sort_Date'] = ret['交易时间']
     ret.loc[:, ['币种', '手续费', '折扣']] = ["CNY", 0, 0]
     return ret
+
 
 def process_heuristics(df, main_col, sub_col):
     """启发式处理"""
@@ -447,7 +515,7 @@ def process_heuristics(df, main_col, sub_col):
             df['描述'].str.contains(pat, regex=True)
         )
 
-    uncat = (df[sub_col] == "")
+    uncat = df[sub_col] == ""
 
     # 1. 关键词分类
     mask = df['商品'].str.contains(CONFIG['KEYWORD_CHARGING'], na=False) & uncat
@@ -465,7 +533,8 @@ def process_heuristics(df, main_col, sub_col):
 
     mask_meal = check('MEAL')
     for key, name, sub_c in INGREDIENT_PRIORITY:
-        mask = check(key) & (~mask_meal) & (uncat | (df[main_col].isin(['购物', '居家', '饮食'])))
+        mask = check(key) & (~mask_meal) & (
+            uncat | (df[main_col].isin(['购物', '居家', '饮食'])))
         if key in ['SEAFOOD', 'PORK', 'POULTRY', 'BEEF_MUTTON', 'VEGETABLE']:
             mask &= (~check('COOKED'))
         if mask.any():
@@ -488,6 +557,38 @@ def process_heuristics(df, main_col, sub_col):
             df.loc[mask_name, '对象'] = extracted[1][mask_name].str.strip()
         df.loc[mask_found, ['项目', '描述']] = ""
 
+    # ================== 【升级修复：前缀提取分类】 ==================
+    # 逻辑：不仅检查“描述 == 子类”，还检查“描述”是否以“子类 + 分隔符”开头
+    # 例子：描述为 "大件.摩托车"，能识别出 "大件"； 描述为 "休闲保健"，能识别 "休闲保健"
+    
+    uncat = df[sub_col] == ""
+    
+    # 1. 准备关键词 (按长度倒序，防止短词误判，如 "饮料水果" 优于 "饮料")
+    valid_subcats = sorted(list(AUTO_MAP_DICT.keys()), key=len, reverse=True)
+    
+    # 2. 构建正则：^(子类1|子类2|...)(?:[. 。\s]|$|-)
+    # 解释：
+    #   ^       : 必须出现在开头
+    #   (...)   : 捕获组，提取出具体的子类名称
+    #   (?:...) : 非捕获组，后面必须跟着 [点/空格/句号/横杠] 或者 [字符串结束]
+    #   这样防止 "大件物品" 被错误识别为 "大件" (如果没有分隔符的话)
+    pattern_prefix = rf"^({'|'.join(map(re.escape, valid_subcats))})(?:[. 。\s]|$|-)"
+    
+    # 3. 提取匹配
+    # 只对未分类的行进行提取
+    if not uncat.empty and valid_subcats:
+        extracted_series = df.loc[uncat, '描述'].astype(str).str.extract(pattern_prefix, expand=False)
+        
+        # 4. 填入结果
+        mask_hit = extracted_series.notna()
+        if mask_hit.any():
+            # 找到原本 df 中的索引
+            target_indices = uncat[uncat].index[mask_hit]
+            print(f"  [提示] 发现 {len(target_indices)} 条记录通过【前缀提取】匹配子类 (如: {extracted_series[mask_hit].iloc[0]}.xx)")
+            df.loc[target_indices, sub_col] = extracted_series[mask_hit]
+            
+    # ================== 【升级修复 结束】 ==================
+
     # 3. [核心] 全自动推导 (子类 -> 记录类型, 主类, 项目)
     mapped_values = df[sub_col].map(AUTO_MAP_DICT)
     mask_mapped = mapped_values.notna()
@@ -501,6 +602,7 @@ def process_heuristics(df, main_col, sub_col):
         df.loc[mask_mapped, '项目'] = target_projs
 
     return df
+
 
 def process_main(df, df_rules, main_col, sub_col):
     """主处理逻辑：规则匹配、分类、清洗"""
@@ -522,12 +624,14 @@ def process_main(df, df_rules, main_col, sub_col):
     df = ensure_columns(df, main_col, sub_col)
 
     # 1. 支付方式标准化 (使用顶部定义的字典)
-    df['支付方式'] = df['支付方式'].astype(str).replace(STANDARDIZE_ACCOUNTS, regex=True)
+    df['支付方式'] = df['支付方式'].astype(str).replace(
+        STANDARDIZE_ACCOUNTS, regex=True)
 
     # 2. 规则匹配 (Merge方式)
     df['商家(old)'] = df.get('交易对方', pd.NA).astype(str).str.strip()
-    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in ['商家(old)', 'is_regex']}
-    
+    rename_map = {c: f'{c}_rule' for c in df_rules.columns if c not in [
+        '商家(old)', 'is_regex']}
+
     # 精确匹配
     df = pd.merge(
         df,
@@ -538,11 +642,13 @@ def process_main(df, df_rules, main_col, sub_col):
     )
 
     # 正则匹配 (仅对未匹配项)
-    uncat = df[df[f"{main_col}_rule"].isna()].index if f"{main_col}_rule" in df.columns else df.index
+    uncat = df[df[f"{main_col}_rule"].isna()].index if f"{
+        main_col}_rule" in df.columns else df.index
     if not uncat.empty:
         to_match = df.loc[uncat, '交易对方'].astype(str)
         for _, r in df_rules[df_rules['is_regex'] == 1].iterrows():
-            idx = to_match[to_match.str.contains(r['商家(old)'], regex=True)].index
+            idx = to_match[to_match.str.contains(
+                r['商家(old)'], regex=True)].index
             if not idx.empty:
                 for c, rc in rename_map.items():
                     df.loc[idx, rc] = r[c]
@@ -559,7 +665,8 @@ def process_main(df, df_rules, main_col, sub_col):
     # 3. 淘宝特殊识别
     if '商户单号' in df.columns:
         mask_tb = (df.get('_source_tag', '') == '#AliPay') & \
-                  df['商户单号'].astype(str).str.strip().str.startswith('T200P4', na=False)
+            df['商户单号'].astype(str).str.strip(
+        ).str.startswith('T200P4', na=False)
         if mask_tb.any():
             df.loc[mask_tb, '商家'] = '淘宝'
 
@@ -597,7 +704,7 @@ def process_main(df, df_rules, main_col, sub_col):
         (df['记录类型'].isin(['支出', '应付款项', '应收款项'])) &
         (df.get('收/支') == '支出'), '金额'
     ] *= -1
-    
+
     # 修正借入金额符号和支付方式
     df.loc[df[sub_col] == '借入', '金额'] = df.loc[df[sub_col] == '借入', '金额'].abs()
     df.loc[(df['支付方式'] == "/") & (df['记录类型'] == "收入"), '支付方式'] = "零钱3"
@@ -607,7 +714,7 @@ def process_main(df, df_rules, main_col, sub_col):
     df['_Sort_Date'] = df['交易时间']
     df['账户'] = df.get('支付方式', "")
     df.loc[:, ['币种', '手续费', '折扣']] = ["CNY", 0, 0]
-    
+
     # 清理非商家字段
     df.loc[df['记录类型'].isin(['应收款项', '应付款项']), '商家'] = ""
     mask_debt = df['记录类型'].isin(['应收款项', '应付款项'])
@@ -618,18 +725,52 @@ def process_main(df, df_rules, main_col, sub_col):
 
     return df
 
+
 def get_user_input():
-    """获取用户输入文件和日期"""
+    """获取用户输入文件和日期（修复 Spyder 弹窗焦点问题）"""
+    # 创建隐藏的主窗口
     root = tk.Tk()
     root.withdraw()
+
+    # --- 核心：夺取焦点五连鞭 ---
+    # 1. 设置置顶
+    root.attributes('-topmost', True)
+    # 2. 提升层级
+    root.lift()
+    # 3. 强制获取焦点
+    root.focus_force()
+    # 4. 强制刷新事件循环 (确保系统执行上述指令)
+    root.update()
+
     print("\n选择文件...")
-    files = filedialog.askopenfilenames(filetypes=[("Excel/CSV", "*.xlsx;*.csv")])
+
+    # 5. 绑定父窗口 (parent=root)，让弹窗继承置顶属性
+    files = filedialog.askopenfilenames(
+        parent=root,
+        title="请选择 Moze 导出的文件",
+        filetypes=[("Excel/CSV", "*.xlsx;*.csv")]
+    )
+
+    # 选完文件后取消置顶，防止遮挡后续操作
+    root.attributes('-topmost', False)
+    root.update()
+
     if not files:
+        root.destroy()
         return None, None
-    
-    start = simpledialog.askstring("筛选", "起始日期 yymmdd (留空导入全部):")
+
+    # 日期输入框同样需要绑定 parent
+    start = simpledialog.askstring(
+        "筛选",
+        "起始日期 yymmdd (留空导入全部):",
+        parent=root
+    )
     st_date = pd.to_datetime(start, format="%y%m%d") if start else None
+
+    # 彻底销毁窗口
+    root.destroy()
     return files, st_date
+
 
 def save_result(df, cols):
     """保存结果文件"""
@@ -649,16 +790,17 @@ def save_result(df, cols):
 
     if not TARGET_DIR.exists():
         TARGET_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     path = TARGET_DIR / f"MOZE导入_{timestamp}.csv"
-    
+
     df.to_csv(path, index=False, columns=cols, encoding='utf-8-sig')
     return path
 
+
 def main():
     """主程序入口"""
-    print(f"{BColors.BOLD}=== Moze 导入工具 v11.37 (优化修复版) ==={BColors.ENDC}")
+    print(f"{BColors.BOLD}=== Moze 导入工具 v11.39 (Prefix Fix & Auto-Close) ==={BColors.ENDC}")
     try:
         load_settings(RULE_BOOK_PATH)
         df_rules = load_rules(RULE_BOOK_PATH)
@@ -666,10 +808,11 @@ def main():
             input("按 Enter 退出")
             return
 
-        cols = [c for c in df_rules.columns if c not in ['商家(old)', 'is_regex']]
+        cols = [c for c in df_rules.columns if c not in [
+            '商家(old)', 'is_regex']]
         main_col = next((c for c in cols if "主类" in c), None)
         sub_col = next((c for c in cols if "子类" in c), None)
-        
+
         if not main_col:
             print("错：找不到主类列")
             return
@@ -678,35 +821,38 @@ def main():
         if not files:
             return
 
-        dfs = [d for f in files if (d := sniff_and_load_data(Path(f))) is not None]
+        dfs = [d for f in files if (
+            d := sniff_and_load_data(Path(f))) is not None]
         if not dfs:
             return
-        
+
         df_raw = pd.concat(dfs, ignore_index=True)
         df_raw['交易时间'] = df_raw['交易时间'].apply(robust_date_converter)
-        
+
         if st_date:
             df_raw = df_raw[df_raw['交易时间'] >= st_date]
-        
+
         df_raw['交易对方'] = df_raw.get('交易对方', pd.NA).astype(str).str.strip()
 
         # 分流处理：转账 vs 普通交易
         mask_trans = df_raw['交易对方'].isin([
             CONFIG['TRANSFER_TARGET_1'], CONFIG['TRANSFER_TARGET_2']
         ])
-        
+
         res_dfs = []
         if mask_trans.any():
-            res_dfs.append(process_transfers(df_raw[mask_trans].copy(), main_col, sub_col))
+            res_dfs.append(process_transfers(
+                df_raw[mask_trans].copy(), main_col, sub_col))
         if (~mask_trans).any():
-            res_dfs.append(process_main(df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
+            res_dfs.append(process_main(
+                df_raw[~mask_trans].copy(), df_rules, main_col, sub_col))
 
         if not res_dfs:
             print("无结果")
             return
-            
+
         df_final = pd.concat(res_dfs, ignore_index=True)
-        
+
         # 补全所有列
         for c in cols:
             if c not in df_final.columns:
@@ -718,13 +864,15 @@ def main():
         # 最终校验
         checks = [
             ('支出', df_final['记录类型'] == '支出', [main_col, sub_col, '项目']),
-            ('债权', df_final['记录类型'].isin(['应收款项', '应付款项']), [main_col, sub_col, '对象'])
+            ('债权', df_final['记录类型'].isin(
+                ['应收款项', '应付款项']), [main_col, sub_col, '对象'])
         ]
-        
+
         for name, mask, check_cols in checks:
             bad = mask & df_final[check_cols].isin(["", pd.NA]).any(axis=1)
             if bad.any():
-                print(f"{BColors.FAIL}[严重] {bad.sum()} 条【{name}】记录缺失关键信息:{BColors.ENDC}")
+                print(f"{BColors.FAIL}[严重] {bad.sum()} 条【{
+                      name}】记录缺失关键信息:{BColors.ENDC}")
                 print(
                     df_final.loc[bad, ['日期', '商家', '描述', '金额'] + check_cols]
                     .head().to_string()
@@ -735,6 +883,23 @@ def main():
     except Exception:
         traceback.print_exc()
 
+
 if __name__ == "__main__":
+    start_time = time.time()  # 1. 开始计时
+    
     main()
-    input("\n回车退出...")
+    
+    end_time = time.time()    # 2. 结束计时
+    duration = end_time - start_time
+    
+    print(f"\n{BColors.BOLD}--------------------------------{BColors.ENDC}")
+    print(f"运行结束 | 总耗时: {duration:.2f} 秒")
+    print(f"{BColors.BOLD}--------------------------------{BColors.ENDC}")
+
+    # 3. 倒计时自动退出 (省去按回车)
+    try:
+        for i in range(3, 0, -1):
+            print(f"\r程序将在 {i} 秒后自动关闭...", end="", flush=True)
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
