@@ -595,7 +595,8 @@ def process_transfers(df, main_col, sub_col):
 
     create_records(mask_t1 & mask_in, acc_lq2, acc_lq3)
     create_records(mask_t1 & mask_out, acc_lq3, acc_lq2)
-    create_records(mask_t2, acc_lq3, acc_icbc, '提现')
+    create_records(mask_t2 & mask_type_tx, acc_lq3, acc_icbc, '提现')
+    create_records(mask_t2 & mask_type_cq, acc_icbc, acc_lq3, '充值')
     create_records(mask_sb & mask_out, acc_pingan, acc_wht, '充值')
 
     if not res_list:

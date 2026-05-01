@@ -569,6 +569,8 @@ def process_transfers(df, main_col, sub_col):
     mask_t1 = df["交易对方"] == t1
     mask_t2 = df["交易对方"] == t2
     mask_sb = df["交易对方"] == t_sb
+    mask_type_cq = df["交易类型"] == "零钱充值"
+    mask_type_tx = df["交易类型"] == "零钱提现"
     mask_in = df["收/支"] == "收入"
     mask_out = df["收/支"] == "支出"
 
@@ -591,7 +593,8 @@ def process_transfers(df, main_col, sub_col):
 
     create_records(mask_t1 & mask_in, acc_lq2, acc_lq3)
     create_records(mask_t1 & mask_out, acc_lq3, acc_lq2)
-    create_records(mask_t2, acc_lq3, acc_icbc, '提现')
+    create_records(mask_t2 & mask_type_tx, acc_lq3, acc_icbc, '提现')
+    create_records(mask_t2 & mask_type_cq, acc_icbc, acc_lq3, '充值')
     create_records(mask_sb & mask_out, acc_pingan, acc_wht, '充值')
 
     if not res_list:
