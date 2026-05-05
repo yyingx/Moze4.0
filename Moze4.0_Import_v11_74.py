@@ -258,7 +258,7 @@ DATA_SOURCE = {
     ],
 
     # === 其他（不在 INGREDIENT_PRIORITY 中）===
-    'Parking_fee': ["WF7023"],
+    'Parking_fee': ["F7023"],
     'REIM_TRAVEL': REIM_TRAVEL_KEYS,
     'REIM_EXPENSE': REIM_EXPENSE_KEYS
 }
