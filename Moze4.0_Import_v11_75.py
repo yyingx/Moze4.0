@@ -133,6 +133,10 @@ NAME_KEYWORDS = {
     '厨房用品': ('日常用品', '厨房用品')
 }
 
+LOCATION_TAG_KEYWORDS = {
+    '#外勤': ['湖北工业大学', '武汉大学']
+}
+
 # --- DATA_SOURCE ---
 DATA_SOURCE = {
     # === 饮料水果 ===
@@ -646,6 +650,21 @@ def process_reimbursement(df, sub_col):
     return df
 
 
+def process_location_tags(df, sub_col):
+    """处理地点标签关键词"""
+    exclude = set(DEBT_KEYWORDS + REIM_TRAVEL_KEYS + REIM_EXPENSE_KEYS)
+    memo = df['备注'].astype(str).str.strip()
+    mask_valid = ~df[sub_col].isin(exclude)
+    for tag, locs in LOCATION_TAG_KEYWORDS.items():
+        mask = memo.str.contains(
+            '|'.join(map(re.escape, locs)), na=False) & mask_valid
+        if mask.any():
+            df.loc[mask, '标签'] = (
+                df.loc[mask, '标签'].fillna('').str.strip() + ' ' + tag
+            ).str.strip()
+    return df
+
+
 def process_generic_keywords(df, sub_col):
     """处理通用分类词（向量化版本）"""
     generic_extracted = df['描述'].str.extract(GENERIC_PATTERN, expand=True)
@@ -790,6 +809,7 @@ def process_heuristics(df_in, main_col, sub_col):
     # 关键词处理（顺序与 v11.73 保持一致）
     df = process_debt_keywords(df, sub_col)
     df = process_reimbursement(df, sub_col)
+    df = process_location_tags(df, sub_col)
     df = process_generic_keywords(df, sub_col)
 
     # ② 正餐时间段推导
