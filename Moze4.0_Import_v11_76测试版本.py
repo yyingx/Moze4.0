@@ -203,7 +203,7 @@ DATA_SOURCE = {
         # --- 通用 ---
         "食材",
         # --- 面点主食 ---
-        "馒头", "发糕", "生水饺", "鲜面条", "干面条", "挂面",
+        "面粉", "馒头", "发糕", "生水饺", "鲜面条", "干面条", "挂面",
         # --- 腊味腌货 ---
         "火腿", "腊肠", "榨菜", "甜酒",
         # --- 调味品/酱料 ---
@@ -975,10 +975,12 @@ def apply_rules(df, df_rules, main_col, sub_col):
                     bill_product.str.contains(pp, regex=use_regex, na=False)
                 )
                 if hit.any():
-                    for c in rename_map:          # 只写输出列，不碰商品
+                    for c in rename_map:
                         val = r.get(c)
                         if pd.notna(val) and str(val).strip() not in ('', 'nan'):
-                            df.loc[hit, c] = val
+                            # ✅ 修复：描述写入 描述_rule，和简单规则走同一条路
+                            target_col = '描述_rule' if c == '描述' else c
+                            df.loc[hit, target_col] = val
                     logger.info(f"复合规则 [{cp} & 商品含'{pp}']: {hit.sum()} 条")
             except re.error as e:
                 logger.warning(f"复合规则正则错误 '{cp}': {e}")
