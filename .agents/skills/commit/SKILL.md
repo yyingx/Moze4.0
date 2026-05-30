@@ -23,7 +23,7 @@ Co-Authored-By: Codex <model> <noreply@anthropic.com>
 - `修复` - Bug 修复
 
 **版本/模块示例：**
-- `v11.74` - Import 脚本版本
+- `v11.84` - Import 脚本版本
 - `云闪付PaddleOCR_lite稳定版` - 模块名称
 
 ## 执行步骤
@@ -39,5 +39,6 @@ Co-Authored-By: Codex <model> <noreply@anthropic.com>
 
 - 不要自动 push，除非用户明确要求
 - 不要提交 .env、credentials 等敏感文件
+- 不要提交支付宝/微信源账单、Moze 导出 CSV、截图账单等私人数据
 - 使用 HEREDOC 格式传递 commit message 以保证格式正确
-- Co-Author 使用当前模型名称（Opus 4.5 / Sonnet 4 等）
+- 不强制添加 Co-Author；如项目需要，再按当前工具身份添加

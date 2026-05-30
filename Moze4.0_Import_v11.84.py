@@ -15,6 +15,8 @@ import traceback
 import re
 import datetime
 import logging
+import csv
+import io
 
 # 日志
 logging.basicConfig(
@@ -305,10 +307,9 @@ RAW_MAPPING_CONFIG = {
     ('支出', '个人', '理财'): ['利息'],
     ('支出', '个人', '额外非必要开销'): ['社交人情', '给予', '孝敬', '礼金红包'],
     ('收入', '收入', '兼职'): ['外卖跑腿(CNY)'],
-    ('收入', '收入', ''): ['其他收入'],
+    ('收入', '收入', ''): ['其他收入', '收红包', '二手折旧'],
     ('收入', '收入', '工作'): ['薪资', '福利补贴', '年终奖'],
     ('收入', '收入', '理财'): ['利息收入', '投资盈利'],
-    ('收入', '收入', ''): ['收红包', '二手折旧'],
     ('转出', '转账', ''): ['转账', '提现', '取出', '存款', '兑换', '充值'],
     ('转入', '转账', ''): ['转账', '提现', '取出', '存款', '兑换', '充值'],
     ('转出', '信用卡还款', ''): ['信用卡还款'],
@@ -385,6 +386,7 @@ OUTPUT_FILTER_COLUMNS = {'商家(old)', 'is_regex', '商品'}
 INVALID_STATUSES = {'已全额退款', '交易关闭'}
 FULL_REFUND_PATTERN = r'已\s*全额退款'
 PARTIAL_REFUND_PATTERN = r'已\s*退款(?!.*全额)'
+REFUND_ROW_PATTERN = r'退款成功|已\s*退款|^退款|退货退款'
 RECORD_TYPES_NEED_DEFAULT_ACCOUNT = {'收入', '应付款项', '返利回馈'}
 
 
@@ -456,8 +458,10 @@ def construct_description(df):
 
 def clean_auto_descriptions(df):
     """清理由账单自动带入、但不适合作为 Moze 描述的文本。"""
-    record_type = normalize_text_series(df.get('记录类型', pd.Series('', index=df.index)))
-    counterparty = normalize_text_series(df.get('交易对方', pd.Series('', index=df.index)))
+    record_type = normalize_text_series(
+        df.get('记录类型', pd.Series('', index=df.index)))
+    counterparty = normalize_text_series(
+        df.get('交易对方', pd.Series('', index=df.index)))
     desc = normalize_text_series(df.get('描述', pd.Series('', index=df.index)))
 
     mask_rebate_ad = (
@@ -1123,6 +1127,78 @@ def filter_valid_transactions(df):
     return df[(~mask_invalid_status) & (df['金额'].abs() > 0.0001)].copy()
 
 
+def warn_refund_rows(df_raw):
+    """列出退款行，并标记需要手动处理的退货/部分退款。"""
+    idx = df_raw.index
+    inout = normalize_text_series(df_raw.get('收/支', pd.Series('', index=idx)))
+    status = normalize_text_series(
+        df_raw.get('当前状态', pd.Series('', index=idx)))
+    trans_type = normalize_text_series(
+        df_raw.get('交易类型', pd.Series('', index=idx)))
+    memo = normalize_text_series(df_raw.get('备注', pd.Series('', index=idx)))
+    product = normalize_text_series(df_raw.get('商品', pd.Series('', index=idx)))
+    order_col = '交易单号' if '交易单号' in df_raw.columns else '交易订单号'
+    order_no = normalize_text_series(
+        df_raw.get(order_col, pd.Series('', index=idx)))
+
+    refund_text = status + ' ' + trans_type + ' ' + product + ' ' + memo
+    mask_refund = refund_text.str.contains(
+        REFUND_ROW_PATTERN, regex=True, na=False)
+    if not mask_refund.any():
+        return
+
+    base_order = order_no.str.extract(r'^(\d{8,})', expand=False).fillna('')
+    refund_date = pd.to_datetime(df_raw.get('交易时间'), errors='coerce')
+    order_date = pd.to_datetime(
+        base_order.str.extract(r'^(\d{8})', expand=False),
+        format='%Y%m%d',
+        errors='coerce'
+    )
+    gap_days = (refund_date.dt.normalize() - order_date).dt.days
+
+    mask_partial_income = inout.eq('收入') & refund_text.str.contains(
+        PARTIAL_REFUND_PATTERN, regex=True, na=False
+    )
+    source_tag = normalize_text_series(
+        df_raw.get('_source_tag', pd.Series('', index=idx))
+    )
+    mask_wechat = source_tag.eq('#WechatPay')
+    mask_wechat_refund_expense = (
+        mask_wechat
+        & inout.eq('支出')
+        & status.str.contains(PARTIAL_REFUND_PATTERN, regex=True, na=False)
+    )
+    mask_return_refund = mask_refund & (
+        mask_partial_income | gap_days.isna() | (gap_days >= 2)
+    )
+    mask_return_refund &= ~mask_wechat_refund_expense
+    manual_count = int(mask_return_refund.sum())
+
+    if manual_count:
+        print(f"{BColors.WARNING}⚠️ 请手动处理 {manual_count} 笔退款。{BColors.ENDC}")
+    else:
+        print(f"{BColors.WARNING}⚠️ 发现 {mask_refund.sum()} 笔退款，已按快速退款忽略。{BColors.ENDC}")
+
+    display = pd.DataFrame({
+        '来源': source_tag.replace({'#WechatPay': '微信', '#AliPay': '支付宝'}),
+        '类型': np.select(
+            [mask_return_refund, mask_wechat_refund_expense],
+            [f"{BColors.FAIL}退货/部分退款{BColors.ENDC}", '原支出已部分退款'],
+            default='快速退款'
+        ),
+        '交易时间': df_raw.get('交易时间'),
+        '交易对方': df_raw.get('交易对方', ''),
+        '金额': df_raw.get('金额', ''),
+        '间隔天数': gap_days.astype('Int64').astype(str).replace('<NA>', ''),
+    })
+    rows = display.loc[mask_refund & ~
+                       mask_wechat_refund_expense].fillna('').head(10)
+    buffer = io.StringIO()
+    rows.to_csv(buffer, index=False, lineterminator='\n',
+                quoting=csv.QUOTE_MINIMAL)
+    print(buffer.getvalue().rstrip())
+
+
 def infer_inout_from_memo(df):
     """根据备注关键词补齐空白的原始流水方向。
 
@@ -1287,9 +1363,8 @@ def process_main(df_in, df_rules, main_col, sub_col):
 def filter_importable_transactions(df):
     """只保留可导入交易，字典明确映射的收入也保留。"""
     memo = normalize_text_series(df['备注'])
-    status = normalize_text_series(df['当前状态'])
-    product = normalize_text_series(df.get('商品', pd.Series('', index=df.index)))
-    refund_text = status + ' ' + memo + ' ' + product
+    refund_text = normalize_text_series(df['当前状态']) + ' ' + memo + ' ' + \
+        normalize_text_series(df.get('商品', pd.Series('', index=df.index)))
     mask_partial_refund_income = (
         (df['收/支'] == '收入')
         & refund_text.str.contains(PARTIAL_REFUND_PATTERN, regex=True, na=False)
@@ -1437,6 +1512,7 @@ def main():
         path = save_result(df_final, cols)
         print(f"\n{BColors.OKGREEN}✅ 成功! 文件: {path}{BColors.ENDC}")
         validate_final_data(df_final, main_col, sub_col)
+        warn_refund_rows(df_raw)
         print(f"{BColors.OKGREEN}✅ 处理完成{BColors.ENDC}")
 
     except KeyboardInterrupt:
