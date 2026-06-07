@@ -2,12 +2,8 @@ __pycache__/
 .venv/
 
 # Bill source files and generated Moze imports
-Moze4.0_Import/MOZE导入_*.csv
-微信支付账单流水文件*
-支付宝交易明细*
-*账单流水*
-*交易明细*
-
+*.csv
+*.xlsx
 # Runtime artifacts
 *.log
 _tmp_*_state.json
