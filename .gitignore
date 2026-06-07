@@ -10,3 +10,6 @@ Moze4.0_Import/MOZE导入_*.csv
 
 # Runtime artifacts
 *.log
+_tmp_*_state.json
+nba_finals_monitor.env
+nba_finals_monitor_state.json
