@@ -193,7 +193,7 @@ DATA_SOURCE = {
         # 面点主食
         "面粉", "馒头", "发糕", "生水饺", "鲜面条", "干面条", "挂面",
         # 腊味腌货
-        "火腿", "腊肠", "榨菜", "甜酒",
+        "火腿", "腊肠", "榨菜", "甜酒", "酱菜",
         # 调味品和酱料
         "老干妈", "杂酱", "酱料", "炸酱", "酱豆", "辣椒酱",
         "白砂糖", "冰糖", "食盐", "生抽", "老抽", "耗油", "料酒",
@@ -990,7 +990,8 @@ def apply_pdd_inout_rule(df, main_col, sub_col):
     """拼多多收入按返利处理；拼多多支出保持支出。"""
     inout = normalize_text_series(df['收/支'])
     mask_pdd = (
-        normalize_text_series(df['交易对方']).str.contains('拼多多', regex=False, na=False)
+        normalize_text_series(df['交易对方']).str.contains(
+            '拼多多', regex=False, na=False)
         | normalize_text_series(df.get('商家', pd.Series('', index=df.index))).eq('拼多多')
     )
     rebate_cols = ['记录类型', main_col, sub_col]
@@ -1233,7 +1234,8 @@ def get_wechat_transfer_income_mask(df):
         df.get('_source_tag', pd.Series('', index=idx))
     )
     inout = normalize_text_series(df.get('收/支', pd.Series('', index=idx)))
-    trans_type = normalize_text_series(df.get('交易类型', pd.Series('', index=idx)))
+    trans_type = normalize_text_series(
+        df.get('交易类型', pd.Series('', index=idx)))
     counterparty = normalize_text_series(
         df.get('交易对方', pd.Series('', index=idx))
     )
@@ -1274,7 +1276,8 @@ def warn_wechat_transfer_income(df_raw):
         '金额': df_raw.get('金额', ''),
     }).loc[mask].head(10)
     buffer = io.StringIO()
-    rows.to_csv(buffer, index=False, lineterminator='\n', quoting=csv.QUOTE_MINIMAL)
+    rows.to_csv(buffer, index=False, lineterminator='\n',
+                quoting=csv.QUOTE_MINIMAL)
     print(buffer.getvalue().rstrip())
 
 
