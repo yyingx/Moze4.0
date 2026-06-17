@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 # 版本信息
-__version__ = '11.91'
+__version__ = '11.92'
 __author__ = 'TZY_YX'
-__updated__ = '2026-06-16'
+__updated__ = '2026-06-17'
 
 import numpy as np
 import pandas as pd
@@ -53,17 +53,26 @@ HEADER_KEYWORDS = ['交易时间', '付款时间', '交易创建时间']
 
 # 默认账户和转账对象
 CONFIG = {
-    'TRANSFER_TARGET_1': '肖恩',
-    'TRANSFER_TARGET_2': '工商银行(9579)',
-    'TRANSFER_TARGET_3': 'YingCH',
-    'TRANSFER_TARGET_SNOWBALL': '上海雪球数智科技有限公司',
-    'ACCOUNT_LINGQIAN_1': '零钱1',
-    'ACCOUNT_LINGQIAN_2': '零钱2',
-    'ACCOUNT_LINGQIAN_3': '零钱3',
-    'ACCOUNT_ICBC': '工商银行',
-    'ACCOUNT_PINGAN': '平安银行4946',
-    'ACCOUNT_WUHANTONG': '武汉通',
-    'ACCOUNT_ALIPAY_BALANCE': 'Alipay_余额',
+    # 微信交易对方：微信零钱账户之间的内部转账对象
+    'WECHAT_TARGET_XIAOEN': '肖恩',
+    'WECHAT_TARGET_YINGCH': 'YingCH',
+
+    # 微信绑定银行卡：交易对方显示为银行卡
+    'WECHAT_BOUND_CARD_ICBC': '工商银行(9579)',
+
+    # 武汉通充值商户：不是微信账户，只是微信账单里的充值交易对方
+    'WUHANTONG_RECHARGE_MERCHANT': '上海雪球数智科技有限公司',
+
+    # Moze 账户：微信零钱账户
+    'MOZE_ACCOUNT_WECHAT_YUYANG': '零钱3',
+    'MOZE_ACCOUNT_WECHAT_XIAOEN': '零钱2',
+    'MOZE_ACCOUNT_WECHAT_YINGCH': '零钱1',
+
+    # Moze 账户：其他账户
+    'MOZE_ACCOUNT_ICBC': '工商银行',
+    'MOZE_ACCOUNT_PINGAN': '平安银行4946',
+    'MOZE_ACCOUNT_WUHANTONG': '武汉通',
+    'MOZE_ACCOUNT_ALIPAY_BALANCE': 'Alipay_余额',
 }
 
 STANDARDIZE_ACCOUNTS = {
@@ -326,6 +335,12 @@ RAW_MAPPING_CONFIG = {
     ('折扣', '折扣', ''): ['折扣'],
     ('返利回馈', '返利回馈', '返利'): ['返利回馈']
 }
+
+NEGATIVE_AMOUNT_RECORD_TYPES = {'支出', '应收款项', '手续费', '转出'}
+POSITIVE_AMOUNT_RECORD_TYPES = {'收入', '应付款项', '返利回馈', '折扣', '转入'}
+MAIN_NEGATIVE_RECORD_TYPES = {'支出', '应收款项', '手续费'}
+DEBT_RECORD_TYPES = {'应收款项', '应付款项'}
+AMOUNT_RECORD_TYPES = NEGATIVE_AMOUNT_RECORD_TYPES | POSITIVE_AMOUNT_RECORD_TYPES
 
 PATTERNS = {k: re.compile(r"(?:" + "|".join(map(re.escape, v)) + ")")
             for k, v in DATA_SOURCE.items()}
@@ -725,9 +740,9 @@ def fill_default_accounts_by_source(df):
     unknown_mask = need_default & ~(wechat_mask | alipay_mask)
 
     if wechat_mask.any():
-        df.loc[wechat_mask, '支付方式'] = CONFIG['ACCOUNT_LINGQIAN_3']
+        df.loc[wechat_mask, '支付方式'] = CONFIG['MOZE_ACCOUNT_WECHAT_YUYANG']
     if alipay_mask.any():
-        df.loc[alipay_mask, '支付方式'] = CONFIG['ACCOUNT_ALIPAY_BALANCE']
+        df.loc[alipay_mask, '支付方式'] = CONFIG['MOZE_ACCOUNT_ALIPAY_BALANCE']
     if unknown_mask.any():
         logger.warning(
             f"{unknown_mask.sum()} 条收入/应付款/返利记录缺少支付方式且来源未知，账户留空"
@@ -900,20 +915,24 @@ def process_transfers(df, main_col, sub_col):
         res_list.extend([o_rec, i_rec])
 
     transfer_rules = [
-        (counterparty.eq(cfg['TRANSFER_TARGET_1']) & mask_in,
-         cfg['ACCOUNT_LINGQIAN_2'], cfg['ACCOUNT_LINGQIAN_3'], '转账'),
-        (counterparty.eq(cfg['TRANSFER_TARGET_1']) & mask_out,
-         cfg['ACCOUNT_LINGQIAN_3'], cfg['ACCOUNT_LINGQIAN_2'], '转账'),
-        (counterparty.eq(cfg['TRANSFER_TARGET_3']) & mask_in,
-         cfg['ACCOUNT_LINGQIAN_1'], cfg['ACCOUNT_LINGQIAN_3'], '转账'),
-        (counterparty.eq(cfg['TRANSFER_TARGET_3']) & mask_out,
-         cfg['ACCOUNT_LINGQIAN_3'], cfg['ACCOUNT_LINGQIAN_1'], '转账'),
-        (counterparty.eq(cfg['TRANSFER_TARGET_2']) & mask_type_tx,
-         cfg['ACCOUNT_LINGQIAN_3'], cfg['ACCOUNT_ICBC'], '提现'),
-        (counterparty.eq(cfg['TRANSFER_TARGET_2']) & mask_type_cq,
-         cfg['ACCOUNT_ICBC'], cfg['ACCOUNT_LINGQIAN_3'], '充值'),
-        (counterparty.eq(cfg['TRANSFER_TARGET_SNOWBALL']) & mask_out,
-         cfg['ACCOUNT_PINGAN'], cfg['ACCOUNT_WUHANTONG'], '充值'),
+        (counterparty.eq(cfg['WECHAT_TARGET_XIAOEN']) & mask_in,
+         cfg['MOZE_ACCOUNT_WECHAT_XIAOEN'],
+         cfg['MOZE_ACCOUNT_WECHAT_YUYANG'], '转账'),
+        (counterparty.eq(cfg['WECHAT_TARGET_XIAOEN']) & mask_out,
+         cfg['MOZE_ACCOUNT_WECHAT_YUYANG'],
+         cfg['MOZE_ACCOUNT_WECHAT_XIAOEN'], '转账'),
+        (counterparty.eq(cfg['WECHAT_TARGET_YINGCH']) & mask_in,
+         cfg['MOZE_ACCOUNT_WECHAT_YINGCH'],
+         cfg['MOZE_ACCOUNT_WECHAT_YUYANG'], '转账'),
+        (counterparty.eq(cfg['WECHAT_TARGET_YINGCH']) & mask_out,
+         cfg['MOZE_ACCOUNT_WECHAT_YUYANG'],
+         cfg['MOZE_ACCOUNT_WECHAT_YINGCH'], '转账'),
+        (counterparty.eq(cfg['WECHAT_BOUND_CARD_ICBC']) & mask_type_tx,
+         cfg['MOZE_ACCOUNT_WECHAT_YUYANG'], cfg['MOZE_ACCOUNT_ICBC'], '提现'),
+        (counterparty.eq(cfg['WECHAT_BOUND_CARD_ICBC']) & mask_type_cq,
+         cfg['MOZE_ACCOUNT_ICBC'], cfg['MOZE_ACCOUNT_WECHAT_YUYANG'], '充值'),
+        (counterparty.eq(cfg['WUHANTONG_RECHARGE_MERCHANT']) & mask_out,
+         cfg['MOZE_ACCOUNT_PINGAN'], cfg['MOZE_ACCOUNT_WUHANTONG'], '充值'),
     ]
     for mask, out_acc, in_acc, sub_val in transfer_rules:
         create_records(mask, out_acc, in_acc, sub_val)
@@ -1237,7 +1256,7 @@ def finalize_records(df, main_col, sub_col):
     df['支付方式'] = normalize_text_series(df['支付方式']).replace(
         STANDARDIZE_ACCOUNTS, regex=True)
 
-    mask_neg = (df['记录类型'].isin(['支出', '应收款项'])) & (
+    mask_neg = df['记录类型'].isin(MAIN_NEGATIVE_RECORD_TYPES) & (
         df.get('收/支') == '支出')
     df.loc[mask_neg, '金额'] *= -1
 
@@ -1252,7 +1271,7 @@ def finalize_records(df, main_col, sub_col):
     df['账户'] = df.get('支付方式', "")
     df[['币种', '手续费', '折扣']] = ["CNY", 0, 0]
 
-    mask_debt = df['记录类型'].isin(['应收款项', '应付款项'])
+    mask_debt = df['记录类型'].isin(DEBT_RECORD_TYPES)
     df.loc[mask_debt, '商家'] = ""
     df.loc[mask_debt, '项目'] = ""
 
@@ -1428,10 +1447,10 @@ def get_wechat_transfer_income_mask(df):
     product = normalize_text_series(df.get('商品', pd.Series('', index=idx)))
 
     internal_targets = {
-        CONFIG['TRANSFER_TARGET_1'],
-        CONFIG['TRANSFER_TARGET_2'],
-        CONFIG['TRANSFER_TARGET_3'],
-        CONFIG['TRANSFER_TARGET_SNOWBALL'],
+        CONFIG['WECHAT_TARGET_XIAOEN'],
+        CONFIG['WECHAT_TARGET_YINGCH'],
+        CONFIG['WECHAT_BOUND_CARD_ICBC'],
+        CONFIG['WUHANTONG_RECHARGE_MERCHANT'],
     }
     return (
         source_tag.eq('#WechatPay')
@@ -1453,7 +1472,8 @@ def warn_wechat_transfer_income(df_raw):
     if not mask.any():
         return
 
-    print(f"{BColors.WARNING}⚠️ 请手动处理 {mask.sum()} 笔微信转账收入。{BColors.ENDC}")
+    print(f"\n{BColors.WARNING}【微信转账收入待处理】{BColors.ENDC}")
+    print(f"{BColors.WARNING}⚠️ 发现 {mask.sum()} 笔无备注微信转账收入，已跳过导入，请手动判断。{BColors.ENDC}")
     rows = pd.DataFrame({
         '来源': '微信',
         '类型': '转账收入',
@@ -1470,12 +1490,11 @@ def warn_wechat_transfer_income(df_raw):
 def validate_final_data(df_final, main_col, sub_col):
     """输出导入前的关键字段检查。"""
     checks = [
-        ('支出/收入/转账', df_final['记录类型'].isin(['支出',
-         '收入', '转入', '转出']), [main_col, sub_col]),
-        ('应收/应付', df_final['记录类型'].isin(['应收款项', '应付款项']),
+        ('非应收应付记录', df_final['记录类型'].isin(
+            AMOUNT_RECORD_TYPES - DEBT_RECORD_TYPES), [main_col, sub_col]),
+        ('应收/应付', df_final['记录类型'].isin(DEBT_RECORD_TYPES),
          [main_col, sub_col, '对象']),
-        ('需账户记录', df_final['记录类型'].isin(
-            ['支出', '收入', '转入', '转出', '应收款项', '应付款项', '返利回馈']), ['账户']),
+        ('需账户记录', df_final['记录类型'].isin(AMOUNT_RECORD_TYPES), ['账户']),
         ('所有记录', pd.Series(True, index=df_final.index), ['日期', '金额', '记录类型'])
     ]
 
@@ -1508,10 +1527,10 @@ def validate_final_data(df_final, main_col, sub_col):
     amount = pd.to_numeric(df_final.get(
         '金额', pd.Series(index=df_final.index)), errors='coerce')
     sign_checks = [
-        ('支出/应收/转出金额应为负数',
-         df_final['记录类型'].isin(['支出', '应收款项', '转出']) & (amount > 0)),
-        ('收入/应付/转入金额应为正数',
-         df_final['记录类型'].isin(['收入', '应付款项', '转入', '返利回馈']) & (amount < 0)),
+        ('支出/应收/手续费/转出金额应为负数',
+         df_final['记录类型'].isin(NEGATIVE_AMOUNT_RECORD_TYPES) & (amount > 0)),
+        ('收入/应付/返利/折扣/转入金额应为正数',
+         df_final['记录类型'].isin(POSITIVE_AMOUNT_RECORD_TYPES) & (amount < 0)),
     ]
     for name, bad in sign_checks:
         if bad.any():
@@ -1590,10 +1609,10 @@ def main():
         df_raw['交易对方'] = normalize_text_series(
             df_raw.get('交易对方', pd.Series('', index=df_raw.index)))
         target_list = [
-            CONFIG['TRANSFER_TARGET_1'],
-            CONFIG['TRANSFER_TARGET_2'],
-            CONFIG['TRANSFER_TARGET_3'],
-            CONFIG['TRANSFER_TARGET_SNOWBALL']
+            CONFIG['WECHAT_TARGET_XIAOEN'],
+            CONFIG['WECHAT_TARGET_YINGCH'],
+            CONFIG['WECHAT_BOUND_CARD_ICBC'],
+            CONFIG['WUHANTONG_RECHARGE_MERCHANT']
         ]
         mask_trans = df_raw['交易对方'].isin(target_list)
 
