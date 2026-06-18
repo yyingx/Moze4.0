@@ -4,6 +4,7 @@ __pycache__/
 # Bill source files and generated Moze imports
 *.csv
 *.xlsx
+/Moze4.0_Debug/
 # Runtime artifacts
 *.log
 _tmp_*_state.json
