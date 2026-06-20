@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 # 版本信息
-__version__ = '11.93 Debug'
+__version__ = '11.94'
 __author__ = 'TZY_YX'
-__updated__ = '2026-06-18'
+__updated__ = '2026-06-21'
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,6 @@ import datetime
 import logging
 import csv
 import io
-import sys
 
 # 日志
 logging.basicConfig(
@@ -38,19 +37,11 @@ class BColors:
     CYAN = '\033[96m'
 
 
-# 配置
-
 # 路径
 CURRENT_DIR = Path(__file__).parent if '__file__' in locals() else Path.cwd()
 RULE_BOOK_PATH = CURRENT_DIR / "Moze Dict.xlsx"
 TARGET_DIR = CURRENT_DIR / "Moze4.0_Import"
-DEBUG_TARGET_DIR = CURRENT_DIR / "Moze4.0_Debug"
 PAUSE_ON_EXIT = False
-
-# 逐模块调试。也可通过命令行 --debug-pipeline 临时开启。
-PIPELINE_DEBUG = False
-PIPELINE_DEBUG_SAMPLE_ROWS = 10
-PIPELINE_DEBUG_AUTO_DELAY = 0
 
 # 文件读取
 ALIPAY_HEADER_RANGE = (20, 30)
@@ -58,24 +49,24 @@ WECHAT_HEADER_RANGE = (14, 20)
 ALIPAY_ENCODING = 'gb18030'
 HEADER_KEYWORDS = ['交易时间', '付款时间', '交易创建时间']
 
-# 默认账户和转账对象
+# 账户与转账对象
 CONFIG = {
-    # 微信交易对方：微信零钱账户之间的内部转账对象
+    # 微信交易对方
     'WECHAT_TARGET_XIAOEN': '肖恩',
     'WECHAT_TARGET_YINGCH': 'YingCH',
 
-    # 微信绑定银行卡：交易对方显示为银行卡
+    # 微信绑定银行卡
     'WECHAT_BOUND_CARD_ICBC': '工商银行(9579)',
 
-    # 武汉通充值商户：不是微信账户，只是微信账单里的充值交易对方
+    # 武汉通充值商户
     'WUHANTONG_RECHARGE_MERCHANT': '上海雪球数智科技有限公司',
 
-    # Moze 账户：微信零钱账户
+    # 微信零钱账户
     'MOZE_ACCOUNT_WECHAT_YUYANG': '零钱3',
     'MOZE_ACCOUNT_WECHAT_XIAOEN': '零钱2',
     'MOZE_ACCOUNT_WECHAT_YINGCH': '零钱1',
 
-    # Moze 账户：其他账户
+    # 其他账户
     'MOZE_ACCOUNT_ICBC': '工商银行',
     'MOZE_ACCOUNT_PINGAN': '平安银行4946',
     'MOZE_ACCOUNT_WUHANTONG': '武汉通',
@@ -102,9 +93,7 @@ REIM_EXPENSE_KEYS = [
 ALL_REIM_KEYS = REIM_TRAVEL_KEYS + REIM_EXPENSE_KEYS
 RECEIVABLE_PAYABLE_SUBCATS = {'借出', '代付', '报账', '押金', '借入'}
 
-# 字段语义约定：
-# 名称 = 子类别下的结构化明细，支出/收入和报销记录共用同一个 Moze 字段。
-# 对象 = 资金往来的对象；描述 = 自由补充说明。
+# 名称为结构化明细；对象为往来对象；描述为补充说明。
 
 # 子类别关键词映射
 SUBCAT_KEYWORDS = {
@@ -125,7 +114,7 @@ SUBCAT_KEYWORDS = {
     '利息收入': '利息收入', '投资盈利': '投资盈利', '二手折旧': '二手折旧', '其他收入': '其他收入', '返利回馈': '返利回馈',
 }
 
-# 普通支出/收入的名称入口。应收应付的报销名称由 REIM_* 关键词单独处理。
+# 普通交易名称关键词；报销名称由 REIM_* 单独处理。
 NAME_KEYWORDS = {
     '水果': ('饮料水果', '水果'),
     '饮料': ('饮料水果', '饮料'),
@@ -250,29 +239,29 @@ DATA_SOURCE = {
     # 医疗
     'Adult_Products': ["避孕套", "成人润滑剂", "安全套", "Condoms"],
 
-    # 正餐关键词，用于按时间推导早餐/午餐/晚餐/夜宵。
+    # 正餐关键词
     'MEAL': [
-        # 1. 地点/校区
+        # 地点/校区
         "东苑一层", "东苑二层", "西区食堂", "竹一", "斯迪姆幼儿园-柏思思",
         "李李",
-        # 2. 连锁品牌
+        # 连锁品牌
         "三镇民生", "永和四喜", "老乡鸡", "黄蜀郎", "麦香园", "丝路",
-        # 3. 强特征的风味/地域
+        # 风味/地域
         "兰州", "沙县", "长沙臭豆腐", "重庆小面",
-        # 4. 具体餐品 - 饭/面/粉/锅
+        # 饭/面/粉/锅
         "麻辣香锅", "麻辣烫", "鸡公煲", "猪脚饭", "卤肉饭", "盖浇饭", "炒饭", "炒面", "快餐", "小碗菜",
         "热干面", "板面", "油泼面", "牛肉面", "刀削面", "牛杂粉", "肠粉", "牛肉汤", "汤粉", "粉面", "凉面", "凉皮",
-        # 5. 具体餐品 - 面点/早餐/小吃
+        # 面点/早餐/小吃
         "水煎包", "小笼包", "汽水包", "煎豆折", "鸡蛋饼", "包粑",
         "煎包", "煎饼", "烧饼", "锅盔", "肉夹馍", "馕",
         "水饺", "蒸饺", "混沌", "馄饨", "包子", "小面", "油条",
-        # 6. 通用场景/店名
+        # 通用场景/店名
         "烧烤", "路边摊", "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆", "餐馆"
     ]
 }
 
-# 分类匹配优先级：顺序会影响最终命中结果。
-# 格式: (DATA_SOURCE key, 名称, 子类别, [排除 key])
+# 分类匹配优先级，顺序不可随意调整。
+# (DATA_SOURCE key, 名称, 子类别, [排除 key])
 INGREDIENT_PRIORITY = [
     # 饮料水果
     ('DRINK', '饮料', '饮料水果'),
@@ -377,11 +366,11 @@ ALL_GENERIC_KEYS = sorted(
 GENERIC_PATTERN = re.compile(
     rf"^({'|'.join(map(re.escape, ALL_GENERIC_KEYS))})(.*)")
 
-# 收入类备注关键词。这里表示正向流入入口，包含单独映射的返利回馈。
+# 收入备注关键词
 _INCOME_KEYWORDS = {'薪资', '福利补贴', '年终奖', '收红包',
                     '利息收入', '投资盈利', '二手折旧', '其他收入', '返利回馈'}
 
-# 支出类备注关键词。
+# 支出备注关键词
 _INFER_EXPENSE_SUBCAT_KEYS = [
     k for k in SUBCAT_KEYWORDS if k not in _INCOME_KEYWORDS]
 INFER_SUBCAT_PATTERN = re.compile(
@@ -391,7 +380,7 @@ INFER_NAME_PATTERN = re.compile(
 INFER_INCOME_PATTERN = re.compile(
     rf"^(?:{'|'.join(map(re.escape, _INCOME_KEYWORDS))})")
 
-# 手动备注关键词入口，用于保留可导入记录。
+# 手动备注入口
 _REIM_PATTERN_STR = '|'.join(map(re.escape, ALL_REIM_KEYS))
 _SUBCAT_PATTERN_STR = '|'.join(map(re.escape, _INFER_EXPENSE_SUBCAT_KEYS))
 _NAME_PATTERN_STR = '|'.join(map(re.escape, NAME_KEYWORDS.keys()))
@@ -412,209 +401,17 @@ REFUND_ROW_PATTERN = r'退款成功|已\s*退款|^退款|退货退款'
 RECORD_TYPES_NEED_DEFAULT_ACCOUNT = {'收入', '应付款项', '返利回馈'}
 
 
-class PipelineDebugStopped(Exception):
-    """用户主动停止逐模块调试。"""
-
-
-class PipelineDebugger:
-    """保存每个业务阶段的快照，并展示相对上一阶段的变化。"""
-
-    def __init__(self, main_col, sub_col):
-        self.enabled = PIPELINE_DEBUG or '--debug-pipeline' in sys.argv
-        self.main_col = main_col
-        self.sub_col = sub_col
-        self.stage_no = 0
-        self.previous = None
-        self.continuous = False
-        self.run_dir = None
-
-        if self.enabled:
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            self.run_dir = DEBUG_TARGET_DIR / timestamp
-            self.run_dir.mkdir(parents=True, exist_ok=True)
-            print(
-                f"\n{BColors.CYAN}【逐模块调试模式】{BColors.ENDC}"
-                f"\n阶段文件目录: {self.run_dir}"
-                "\nEnter=下一步 | C=连续运行 | Q=停止"
-            )
-
-    def _compare(self, current):
-        if self.previous is None:
-            return [], current.index[:PIPELINE_DEBUG_SAMPLE_ROWS]
-
-        previous = self.previous
-        previous_view = previous
-        current_view = current
-        current_index_map = None
-
-        if '交易单号' in previous.columns and '交易单号' in current.columns:
-            previous_id = normalize_text_series(previous['交易单号'])
-            current_id = normalize_text_series(current['交易单号'])
-            previous_order = previous_id
-            current_order = current_id
-            if '_source_tag' in previous.columns:
-                previous_order = normalize_text_series(
-                    previous['_source_tag']) + '|' + previous_order
-            if '_source_tag' in current.columns:
-                current_order = normalize_text_series(
-                    current['_source_tag']) + '|' + current_order
-
-            if (
-                previous_id.ne('').all()
-                and current_id.ne('').all()
-            ):
-                previous_keys = (
-                    previous_order + '#' +
-                    previous_order.groupby(previous_order).cumcount().astype(str)
-                )
-                current_keys = (
-                    current_order + '#' +
-                    current_order.groupby(current_order).cumcount().astype(str)
-                )
-                previous_view = previous.copy()
-                current_view = current.copy()
-                previous_view.index = previous_keys
-                current_view.index = current_keys
-                current_index_map = dict(zip(current_keys, current.index))
-
-        common_index = previous_view.index.intersection(current_view.index)
-        common_cols = [
-            c for c in current_view.columns if c in previous_view.columns]
-        changed = []
-        changed_indices = set()
-
-        for col in common_cols:
-            old = previous_view.loc[
-                common_index, col].astype('string').fillna('')
-            new = current_view.loc[
-                common_index, col].astype('string').fillna('')
-            mask = old.ne(new)
-            count = int(mask.sum())
-            if count:
-                changed.append((col, count))
-                changed_keys = common_index[mask].tolist()
-                if current_index_map is None:
-                    changed_indices.update(changed_keys)
-                else:
-                    changed_indices.update(
-                        current_index_map[key] for key in changed_keys)
-
-        for col in current.columns:
-            if col in previous.columns:
-                continue
-            count = int((~is_blank_series(current[col])).sum())
-            if count:
-                changed.append((col, count))
-
-        sample_indices = list(changed_indices)[:PIPELINE_DEBUG_SAMPLE_ROWS]
-        if not sample_indices:
-            sample_indices = current.index[:PIPELINE_DEBUG_SAMPLE_ROWS].tolist()
-        return changed, sample_indices
-
-    def _wait(self):
-        if self.continuous:
-            if PIPELINE_DEBUG_AUTO_DELAY > 0:
-                time.sleep(PIPELINE_DEBUG_AUTO_DELAY)
-            return
-
-        try:
-            choice = input(
-                "\n[Enter] 下一步  [C] 连续运行  [Q] 停止调试: "
-            ).strip().lower()
-        except EOFError:
-            print("当前环境无法等待输入，已切换为连续运行。")
-            self.continuous = True
-            return
-
-        if choice == 'c':
-            self.continuous = True
-        elif choice == 'q':
-            raise PipelineDebugStopped()
-
-    @staticmethod
-    def _console_safe(text):
-        """替换当前 Windows 控制台编码无法显示的字符，避免调试中断。"""
-        encoding = getattr(sys.stdout, 'encoding', None) or 'utf-8'
-        return str(text).encode(
-            encoding, errors='replace'
-        ).decode(encoding, errors='replace')
-
-    def checkpoint(self, stage_name, df, reset_compare=False):
-        """输出阶段摘要、样例和完整 CSV 快照。"""
-        if not self.enabled:
-            return df
-
-        self.stage_no += 1
-        current = df.copy()
-        if reset_compare:
-            self.previous = None
-        safe_name = re.sub(r'[<>:"/\\|?*]+', '_', stage_name)
-        stage_path = self.run_dir / \
-            f"{self.stage_no:02d}_{safe_name}.csv"
-        current.to_csv(stage_path, index=False, encoding='utf-8-sig')
-
-        changed, sample_indices = self._compare(current)
-        previous_count = len(self.previous) if self.previous is not None else 0
-        print(
-            f"\n{BColors.BOLD}{BColors.CYAN}"
-            f"[{self.stage_no:02d}] {stage_name}{BColors.ENDC}"
-        )
-        if self.previous is None:
-            print(f"行数: {len(current)}")
-        else:
-            print(f"行数: {previous_count} → {len(current)}")
-
-        if changed:
-            changed_text = ', '.join(
-                f"{col}({count})" for col, count in changed[:12])
-            print(f"变化字段: {changed_text}")
-        else:
-            print("变化字段: 无")
-
-        display_cols = [
-            c for c in [
-                '交易时间', '交易对方', '商品', '备注', '收/支',
-                '记录类型', self.main_col, self.sub_col, '名称',
-                '商家', '项目', '描述', '标签', '对象', '金额'
-            ] if c in current.columns
-        ]
-        if not current.empty and display_cols:
-            sample = current.loc[
-                current.index.intersection(sample_indices), display_cols
-            ].head(PIPELINE_DEBUG_SAMPLE_ROWS)
-            if sample.empty:
-                sample = current[display_cols].head(PIPELINE_DEBUG_SAMPLE_ROWS)
-            print(self._console_safe(
-                sample.fillna('').to_string(index=True)))
-        print(f"完整快照: {stage_path}")
-
-        has_change = (
-            self.previous is None
-            or len(current) != len(self.previous)
-            or set(current.columns) != set(self.previous.columns)
-            or bool(changed)
-        )
-        self.previous = current
-        if has_change:
-            self._wait()
-        else:
-            print("本阶段无变化，自动继续。")
-        return df
-
-
-# 处理函数
-
-# 通用辅助函数
+# 通用辅助
 
 def normalize_text_series(series):
-    """统一把空值/nan 字符串清洗为空字符串。"""
+    """统一空值文本。"""
     return series.fillna('').astype(str).str.strip().replace({
         'nan': '', 'NaN': '', 'None': '', '<NA>': '', '/': ''
     })
 
 
 def is_blank_series(series):
-    """判断 Series 中的空字符串、NA 和常见空值文本。"""
+    """判断空值文本。"""
     return series.fillna('').astype(str).str.strip().isin(BLANK_STRINGS)
 
 
@@ -632,7 +429,7 @@ def robust_date_converter(x):
 
 
 def find_header_row(file_path: Path, search_range: tuple, encoding: str = 'utf-8'):
-    """动态检测 header 行号"""
+    """检测表头行。"""
     start, end = search_range
     for i in range(start, end + 1):
         try:
@@ -653,7 +450,7 @@ def find_header_row(file_path: Path, search_range: tuple, encoding: str = 'utf-8
 
 
 def ensure_columns(df, main_col, sub_col):
-    """确保必要的列存在"""
+    """补齐必要列。"""
     cols_to_check = [main_col, sub_col, '金额', '记录类型', '账户', '商家',
                      '描述', '项目', '名称', '对象', '标签', '日期', '时间', '币种', '手续费', '折扣']
     for c in cols_to_check:
@@ -703,7 +500,7 @@ def load_rules(rule_path: Path):
 
 
 def split_rules(df_rules):
-    """把字典拆成仅商家、仅商品和商家+商品三组规则。"""
+    """拆分三类字典规则。"""
     merchant = normalize_text_series(df_rules['商家(old)'])
     product = normalize_text_series(df_rules['商品'])
     merchant_mask = merchant.ne('')
@@ -716,7 +513,7 @@ def split_rules(df_rules):
 
 
 def get_output_columns(df_rules):
-    """从规则文件列顺序推导输出字段与主/子类别列名。"""
+    """获取输出字段和类别列。"""
     cols = [c for c in df_rules.columns if c not in OUTPUT_FILTER_COLUMNS]
     main_col = next((c for c in cols if "主类" in c), None)
     sub_col = next((c for c in cols if "子类" in c), None)
@@ -724,7 +521,7 @@ def get_output_columns(df_rules):
 
 
 def sniff_and_load_data(file_path: Path):
-    """读取账单文件，动态检测 header 并统一列名。"""
+    """读取并统一账单字段。"""
     logger.info(f"读取: {file_path.name}")
     ftype, df = None, None
     suffix = file_path.suffix.lower()
@@ -773,7 +570,7 @@ def sniff_and_load_data(file_path: Path):
 
 
 def load_bill_files(files):
-    """读取多个账单文件，返回成功读取的 DataFrame 列表。"""
+    """读取多个账单文件。"""
     dfs = []
     for f in files:
         d = sniff_and_load_data(Path(f))
@@ -783,7 +580,7 @@ def load_bill_files(files):
 
 
 def get_user_input():
-    """获取用户输入"""
+    """选择文件和起始日期。"""
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
@@ -807,10 +604,10 @@ def get_user_input():
     return files, st_date
 
 
-# 原始流水准备
+# 原始流水
 
 def prepare_raw_transactions(df_in):
-    """复制原始交易并补齐基础列。"""
+    """补齐原始交易列。"""
     df = df_in.copy()
     for c in RAW_REQUIRED_COLUMNS:
         if c not in df.columns:
@@ -819,7 +616,7 @@ def prepare_raw_transactions(df_in):
 
 
 def mark_taobao_orders(df):
-    """支付宝淘宝订单统一标记商家。"""
+    """标记淘宝订单。"""
     if '商户单号' not in df.columns:
         return df
     source_tag = df.get('_source_tag', pd.Series('', index=df.index))
@@ -831,12 +628,7 @@ def mark_taobao_orders(df):
 
 
 def infer_inout_from_memo(df):
-    """根据备注关键词补齐空白的原始流水方向。
-
-    这里的“收/支”只用于筛选记录和决定金额方向，不代表最终 Moze 记录类型。
-    借入会先标为收入，后续再由子类别映射成“应付款项”。
-    借出/代付/报账/押金会先标为支出，后续再映射成“应收款项”。
-    """
+    """按备注补齐原始收支方向。"""
     memo = normalize_text_series(df['备注'])
     mask_empty_inout = is_blank_series(df['收/支'])
 
@@ -867,12 +659,7 @@ def drop_invalid_dates(df):
 
 
 def construct_description(df):
-    """
-    构建描述字段。
-
-    优先级：备注 > 淘宝商品名 > 字典描述。
-    描述_rule 只在当前描述为空时补充，避免覆盖手动备注。
-    """
+    """构建描述：备注 > 淘宝商品名 > 字典描述。"""
     df['描述'] = ""
 
     mask_tb = df['商家'].fillna('').astype(str).eq('淘宝')
@@ -897,7 +684,7 @@ def construct_description(df):
 
 
 def clean_auto_descriptions(df):
-    """清理由账单自动带入、但不适合作为 Moze 描述的文本。"""
+    """清理无效自动描述。"""
     record_type = normalize_text_series(
         df.get('记录类型', pd.Series('', index=df.index)))
     counterparty = normalize_text_series(
@@ -917,11 +704,7 @@ def clean_auto_descriptions(df):
 
 
 def fill_default_accounts_by_source(df):
-    """按账单来源给无支付方式的收入类记录补默认账户。
-
-    微信收入/应付款/返利常见支付方式为 `/`，支付宝同类记录常见为空；
-    但这里不依赖空值形态，而是优先根据 `_source_tag` 判断来源。
-    """
+    """按账单来源补默认账户。"""
     need_default = (
         df['记录类型'].isin(RECORD_TYPES_NEED_DEFAULT_ACCOUNT)
         & is_blank_series(df['支付方式'])
@@ -950,7 +733,7 @@ def fill_default_accounts_by_source(df):
 # 字典规则应用
 
 def _apply_single_rules(df, merchant_rules, product_rules, output_cols):
-    """按字典顺序应用同级的仅商家和仅商品规则，只补空白字段。"""
+    """应用单条件规则，只补空字段。"""
     single_rules = pd.concat(
         [merchant_rules, product_rules]
     ).sort_index()
@@ -995,7 +778,7 @@ def _apply_single_rules(df, merchant_rules, product_rules, output_cols):
 
 
 def apply_rules(df, df_rules, main_col, sub_col):
-    """应用字典规则，支持商家、商品及商家+商品规则。"""
+    """应用字典规则。"""
     df['商家(old)'] = normalize_text_series(
         df.get('交易对方', pd.Series('', index=df.index)))
     if '商品' not in df.columns:
@@ -1015,7 +798,7 @@ def apply_rules(df, df_rules, main_col, sub_col):
 
 
 def apply_compound_rules(df, compound_rules, output_cols):
-    """应用最高优先级的商家+商品规则，描述支持商家正则捕获组。"""
+    """应用商家+商品规则，支持商家和描述捕获组。"""
     bill_product = normalize_text_series(df['商品'])
     merchant_old = normalize_text_series(df['商家(old)'])
 
@@ -1064,7 +847,7 @@ def apply_compound_rules(df, compound_rules, output_cols):
             if pd.isna(val) or str(val).strip() in ('', 'nan'):
                 continue
 
-            if c == '描述':
+            if c in {'描述', '商家'}:
                 template = str(val)
                 has_group_template = bool(
                     re.search(r'\\(?:[1-9]|g<[^>]+>)', template)
@@ -1072,7 +855,7 @@ def apply_compound_rules(df, compound_rules, output_cols):
                 if has_group_template:
                     if merchant_regex is None:
                         logger.warning(
-                            f"描述模板 '{template}' 需要商家正则捕获组，已跳过")
+                            f"{c}模板 '{template}' 需要商家正则捕获组，已跳过")
                         continue
                     try:
                         expanded = merchant_old.loc[hit].map(
@@ -1081,17 +864,19 @@ def apply_compound_rules(df, compound_rules, output_cols):
                         )
                     except (re.error, IndexError) as e:
                         logger.warning(
-                            f"描述捕获组模板错误 '{template}': {e}")
+                            f"{c}捕获组模板错误 '{template}': {e}")
                         continue
+                else:
+                    expanded = pd.Series(val, index=df.index[hit])
+
+                if c == '描述':
                     df.loc[hit, '描述_rule'] = expanded
                 else:
-                    df.loc[hit, '描述_rule'] = val
-            elif c == '商家':
-                # 商家清洗结果只补空，避免覆盖已确定的展示商家。
-                target_mask = hit & is_blank_series(df['商家'])
-                df.loc[target_mask, '商家'] = val
+                    # 商家只补空
+                    target_mask = hit & is_blank_series(df['商家'])
+                    df.loc[target_mask, '商家'] = expanded.loc[target_mask]
             else:
-                # 其他字段覆盖单条件规则，体现复合规则的最高字典优先级。
+                # 复合规则覆盖单条件规则
                 df.loc[hit, c] = val
         logger.debug(
             f"复合规则 [{merchant_pattern} & 商品含'{product_pattern}']: {hit.sum()} 条")
@@ -1118,10 +903,10 @@ def apply_pdd_inout_rule(df, main_col, sub_col):
     return df
 
 
-# 转账与手动备注解析
+# 转账与备注
 
 def clear_overridden_classification_fields(df, mask):
-    """手动备注覆盖字典分类时，清理旧分类的结构化字段和报销标签。"""
+    """清理被手动备注覆盖的分类字段。"""
     df.loc[mask, ['名称', '对象']] = ''
     tags = normalize_text_series(df.loc[mask, '标签'])
     df.loc[mask, '标签'] = (
@@ -1203,13 +988,13 @@ def process_transfers(df, main_col, sub_col):
 
 
 def parse_memo_subcategory(df, main_col, sub_col):
-    """解析备注中的子类别，向量化点号分隔处理"""
+    """解析备注子类别。"""
     if '备注' not in df.columns:
         return df
 
     memo_series = df['备注'].astype(str).str.strip().replace('nan', '')
 
-    # 特殊关键词映射
+    # 特殊映射
     special_keywords = {'日用': ('支出', '购物', '日常用品')}
     for keyword, (r_type, main_cat, subcat) in special_keywords.items():
         pattern = rf'^{re.escape(keyword)}(.*)$'
@@ -1224,7 +1009,7 @@ def parse_memo_subcategory(df, main_col, sub_col):
             df.loc[matches, '描述'] = extracted
             memo_series = memo_series.where(~matches, '')
 
-    # 处理标准子类别
+    # 标准子类别
     for subcat in VALID_SUBCATS:
         pattern = rf'^{re.escape(subcat)}(.*)$'
         matches = memo_series.str.match(pattern, na=False)
@@ -1274,11 +1059,7 @@ def parse_memo_subcategory(df, main_col, sub_col):
 
 
 def process_debt_keywords(df, sub_col):
-    """处理普通借贷关键词。
-
-    借出/代付/押金/借入/报账这类往来记录只写子类别和对象，不写名称。
-    报销费用类型由 process_reimbursement 写入名称。
-    """
+    """处理借贷关键词。"""
     extracted = df['描述'].str.extract(DEBT_PATTERN, expand=True)
     mask_found = extracted[0].notna()
     if mask_found.any():
@@ -1291,10 +1072,7 @@ def process_debt_keywords(df, sub_col):
 
 
 def extract_prefix_detail(series, pattern, valid_keys=None, empty_only_mask=None):
-    """解析“关键词 + 剩余描述”，返回命中 mask、关键词和尾部描述。
-
-    这是字段层面的通用动作；调用方仍负责决定子类别、对象、标签等业务语义。
-    """
+    """拆分关键词和尾部描述。"""
     extracted = series.str.extract(pattern, expand=True)
     mask = extracted[0].notna()
     if valid_keys is not None:
@@ -1308,7 +1086,7 @@ def extract_prefix_detail(series, pattern, valid_keys=None, empty_only_mask=None
 
 
 def process_reimbursement(df, sub_col):
-    """处理报销关键词，把费用类型写入名称字段。"""
+    """处理报销关键词。"""
     mask_reim, reim_names, reim_desc = extract_prefix_detail(
         df['描述'], REIM_PATTERN)
     if mask_reim.any():
@@ -1327,7 +1105,7 @@ def process_reimbursement(df, sub_col):
 
 
 def process_location_tags(df, sub_col):
-    """处理地点标签关键词"""
+    """处理地点标签。"""
     exclude = set(DEBT_KEYWORDS)
     memo = df['备注'].astype(str).str.strip()
     mask_valid = ~df[sub_col].isin(exclude)
@@ -1342,7 +1120,7 @@ def process_location_tags(df, sub_col):
 
 
 def process_generic_keywords(df, sub_col):
-    """处理通用分类词（向量化版本）"""
+    """处理通用分类词。"""
     mask_empty_subcat = df[sub_col] == ""
     mask_generic, generic_keys, generic_tails = extract_prefix_detail(
         df['描述'], GENERIC_PATTERN, empty_only_mask=mask_empty_subcat)
@@ -1377,11 +1155,11 @@ def process_generic_keywords(df, sub_col):
     return df
 
 
-# 自动分类推导
+# 自动分类
 
 def _apply_ingredient_patterns(df, sub_col, search_series, main_col,
                                mask_meal, mask_ingredients_exact):
-    """按关键词优先级匹配食材和商品类别。"""
+    """匹配食材和商品类别。"""
     main_filter = df[sub_col] == ""
 
     for item in INGREDIENT_PRIORITY:
@@ -1422,7 +1200,7 @@ def _infer_meal_time(df, sub_col, mask_meal):
 
 
 def _map_record_types(df, sub_col, main_col):
-    """按子类别映射记录类型、主类别和项目。"""
+    """映射记录类型、主类别和项目。"""
     mapped_values = df[sub_col].map(AUTO_MAP_DICT)
     mask_mapped = mapped_values.notna()
     if mask_mapped.any():
@@ -1435,8 +1213,8 @@ def _map_record_types(df, sub_col, main_col):
     return df
 
 
-def process_heuristics(df_in, main_col, sub_col, debugger=None):
-    """按商家、商品和备注推导分类信息。"""
+def process_heuristics(df_in, main_col, sub_col):
+    """完成分类推导和记录映射。"""
     df = df_in.copy()
     df.reset_index(drop=True, inplace=True)
 
@@ -1460,45 +1238,32 @@ def process_heuristics(df_in, main_col, sub_col, debugger=None):
     mask_ingredients_exact = search_series.str.contains(
         PATTERNS['INGREDIENTS'], regex=True)
 
-    # 先处理手动备注关键词，手动备注优先于字典和启发式分类。
     df = process_debt_keywords(df, sub_col)
     df = process_reimbursement(df, sub_col)
-    if debugger:
-        debugger.checkpoint("借贷与报销解析", df)
 
     df = process_location_tags(df, sub_col)
     df = process_generic_keywords(df, sub_col)
-    if debugger:
-        debugger.checkpoint("地点标签与普通关键词", df)
 
-    # 再用商品和商家关键词补空白分类。
+    # 自动关键词只补空分类
     df = _apply_ingredient_patterns(
         df, sub_col, search_series, main_col,
         mask_meal | mask_dict_meal,
         mask_ingredients_exact
     )
-    if debugger:
-        debugger.checkpoint("食材与商品关键词推导", df)
 
-    # 正餐按交易时间拆成早餐、午餐、晚餐或夜宵。
     mask_meal = mask_meal | (mask_dict_meal & is_blank_series(df[sub_col]))
     df = _infer_meal_time(df, sub_col, mask_meal)
-    if debugger:
-        debugger.checkpoint("餐别时间推导", df)
 
-    # 最后把子类别映射到 Moze 记录字段。
     df = _map_record_types(df, sub_col, main_col)
-    if debugger:
-        debugger.checkpoint("记录类型映射", df)
 
     df['描述'] = df['描述'].str.strip()
     return df
 
 
-# 记录收尾与导出过滤
+# 收尾与过滤
 
 def finalize_records(df, main_col, sub_col):
-    """最终处理：金额符号、日期时间、账户等"""
+    """整理金额、日期和账户。"""
     df['支付方式'] = normalize_text_series(df['支付方式']).replace(
         STANDARDIZE_ACCOUNTS, regex=True)
 
@@ -1518,14 +1283,15 @@ def finalize_records(df, main_col, sub_col):
     df[['币种', '手续费', '折扣']] = ["CNY", 0, 0]
 
     mask_debt = df['记录类型'].isin(DEBT_RECORD_TYPES)
-    df.loc[mask_debt, '商家'] = ""
+    mask_pure_debt = mask_debt & df[sub_col].ne('报账')
+    df.loc[mask_pure_debt, '商家'] = ""
     df.loc[mask_debt, '项目'] = ""
 
     return df
 
 
 def filter_exportable_transactions(df):
-    """导出前过滤不可入账记录；原始流水先全量参与规则分析。"""
+    """过滤不可导出记录。"""
     status = normalize_text_series(df['当前状态'])
     memo = normalize_text_series(df['备注'])
     refund_text = normalize_text_series(df['当前状态']) + ' ' + memo + ' ' + \
@@ -1567,8 +1333,8 @@ def filter_exportable_transactions(df):
     ].copy()
 
 
-def process_main(df_in, df_rules, main_col, sub_col, debugger=None):
-    """处理非转账主交易。"""
+def process_main(df_in, df_rules, main_col, sub_col):
+    """处理普通交易。"""
     df = prepare_raw_transactions(df_in)
     df = infer_inout_from_memo(df)
 
@@ -1580,17 +1346,11 @@ def process_main(df_in, df_rules, main_col, sub_col, debugger=None):
     df = ensure_columns(df, main_col, sub_col)
     df['支付方式'] = normalize_text_series(df['支付方式']).replace(
         STANDARDIZE_ACCOUNTS, regex=True)
-    if debugger:
-        debugger.checkpoint("基础字段与账户标准化", df)
 
     df = apply_rules(df, df_rules, main_col, sub_col)
-    if debugger:
-        debugger.checkpoint("字典规则匹配", df)
 
     df = apply_pdd_inout_rule(df, main_col, sub_col)
     df = mark_taobao_orders(df)
-    if debugger:
-        debugger.checkpoint("拼多多与淘宝特殊规则", df)
 
     df = construct_description(df)
     df.drop(columns=['描述_rule'], inplace=True, errors='ignore')
@@ -1599,33 +1359,24 @@ def process_main(df_in, df_rules, main_col, sub_col, debugger=None):
     df['商家'] = df.get('商家', pd.NA).replace("", pd.NA).fillna(df['交易对方'])
     df = clean_auto_descriptions(df)
     df[sub_col] = normalize_text_series(df[sub_col])
-    if debugger:
-        debugger.checkpoint("描述构建与基础字段回填", df)
 
     df = parse_memo_subcategory(df, main_col, sub_col)
-    if debugger:
-        debugger.checkpoint("手动备注解析", df)
 
-    df = process_heuristics(df, main_col, sub_col, debugger)
+    df = process_heuristics(df, main_col, sub_col)
 
     df = drop_invalid_dates(df)
     df = filter_exportable_transactions(df)
-    if debugger:
-        debugger.checkpoint("无效记录与导出过滤", df)
-
     if df.empty:
         return pd.DataFrame()
 
     df = finalize_records(df, main_col, sub_col)
-    if debugger:
-        debugger.checkpoint("金额日期账户最终处理", df)
     return df
 
 
-# 检查、提示与保存
+# 检查与保存
 
 def warn_refund_rows(df_raw):
-    """列出退款行，并标记需要手动处理的退货/部分退款。"""
+    """提示退款记录。"""
     idx = df_raw.index
     inout = normalize_text_series(df_raw.get('收/支', pd.Series('', index=idx)))
     status = normalize_text_series(
@@ -1697,7 +1448,7 @@ def warn_refund_rows(df_raw):
 
 
 def get_wechat_transfer_income_mask(df):
-    """识别无备注的微信转账收入；这类记录只提示，不导入。"""
+    """识别待处理的微信转账收入。"""
     idx = df.index
     source_tag = normalize_text_series(
         df.get('_source_tag', pd.Series('', index=idx))
@@ -1728,7 +1479,7 @@ def get_wechat_transfer_income_mask(df):
 
 
 def warn_wechat_transfer_income(df_raw):
-    """提示无备注的微信转账收入，避免把语义不明的收款漏掉。"""
+    """提示待处理的微信转账收入。"""
     idx = df_raw.index
     counterparty = normalize_text_series(
         df_raw.get('交易对方', pd.Series('', index=idx))
@@ -1753,7 +1504,7 @@ def warn_wechat_transfer_income(df_raw):
 
 
 def validate_final_data(df_final, main_col, sub_col):
-    """输出导入前的关键字段检查。"""
+    """检查导入字段。"""
     checks = [
         ('非应收应付记录', df_final['记录类型'].isin(
             AMOUNT_RECORD_TYPES - DEBT_RECORD_TYPES), [main_col, sub_col]),
@@ -1811,7 +1562,7 @@ def validate_final_data(df_final, main_col, sub_col):
 
 
 def save_result(df, cols):
-    """保存结果 CSV。"""
+    """保存 CSV。"""
     if '标签' in df.columns and '_source_tag' in df.columns:
         m = ~df['记录类型'].isin(['转入', '转出'])
         df.loc[m, '标签'] = (df.loc[m, '标签'].fillna(
@@ -1830,10 +1581,10 @@ def save_result(df, cols):
     return path
 
 
-# 程序入口
+# 入口
 
 def main():
-    """主函数"""
+    """运行转换。"""
     print(f"{BColors.BOLD}{BColors.CYAN}")
     print("=" * 50)
     print(f"  Moze 导入脚本 v{__version__}")
@@ -1873,14 +1624,8 @@ def main():
 
         df_raw['交易对方'] = normalize_text_series(
             df_raw.get('交易对方', pd.Series('', index=df_raw.index)))
-        debugger = (
-            PipelineDebugger(main_col, sub_col)
-            if PIPELINE_DEBUG or '--debug-pipeline' in sys.argv
-            else None
-        )
-        if debugger:
-            debugger.checkpoint("全部原始流水", df_raw)
 
+        # 分流内部转账
         target_list = [
             CONFIG['WECHAT_TARGET_XIAOEN'],
             CONFIG['WECHAT_TARGET_YINGCH'],
@@ -1891,29 +1636,18 @@ def main():
 
         res_dfs = []
         main_candidates = df_raw[~mask_trans].copy()
-        transfer_df = pd.DataFrame()
-        transfer_candidates = df_raw[mask_trans].copy()
-        if debugger:
-            debugger.checkpoint(
-                "内部转账候选", transfer_candidates, reset_compare=True)
-
         if mask_trans.any():
             transfer_df, transfer_unhandled = process_transfers(
-                transfer_candidates, main_col, sub_col
+                df_raw[mask_trans].copy(), main_col, sub_col
             )
             res_dfs.append(transfer_df)
             if not transfer_unhandled.empty:
                 main_candidates = pd.concat(
                     [main_candidates, transfer_unhandled], ignore_index=True
                 )
-        if debugger:
-            debugger.checkpoint("生成的转账记录", transfer_df)
-            debugger.checkpoint(
-                "普通交易候选", main_candidates, reset_compare=True)
-
         if not main_candidates.empty:
             res_dfs.append(process_main(main_candidates,
-                           df_rules, main_col, sub_col, debugger))
+                           df_rules, main_col, sub_col))
 
         res_dfs = [d for d in res_dfs if d is not None and not d.empty]
         if not res_dfs:
@@ -1921,24 +1655,17 @@ def main():
             return
 
         df_final = pd.concat(res_dfs, ignore_index=True)
-        if debugger:
-            debugger.checkpoint("合并普通交易与转账", df_final)
-
         for c in cols:
             if c not in df_final.columns:
                 df_final[c] = ""
 
         path = save_result(df_final, cols)
-        if debugger:
-            debugger.checkpoint("最终排序与导出字段", df_final[cols].copy())
         print(f"\n{BColors.OKGREEN}✅ 成功! 文件: {path}{BColors.ENDC}")
         validate_final_data(df_final, main_col, sub_col)
         warn_refund_rows(df_raw)
         warn_wechat_transfer_income(df_raw)
         print(f"{BColors.OKGREEN}✅ 处理完成{BColors.ENDC}")
 
-    except PipelineDebugStopped:
-        logger.info("用户停止逐模块调试")
     except KeyboardInterrupt:
         logger.info("用户取消操作")
     except Exception:
