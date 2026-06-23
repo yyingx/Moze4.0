@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python 脚本集，将支付宝/微信/云闪付账单转换为 Moze 4.0 导入格式。
 
+## 项目健康检查
+
+执行项目健康检查前，先读取以下历史监控记忆，以上次状态为基线检查新增变化：
+
+`C:\Users\yingx\.codex\automations\moze\memory.md`
+
+该文件仅用于项目健康检查；普通开发、转换和调试任务无需读取。
+
 ## 快速开始
 
 ```bash
@@ -66,7 +74,7 @@ python Moze4.0报销_Enhanced.py             # 差旅报销生成
 - **`INGREDIENT_PRIORITY`** - 匹配优先级顺序（顺序决定匹配结果）
 - **`RAW_MAPPING_CONFIG`** - 子类别 → (记录类型, 主类别, 项目) 映射
 - **`SUBCAT_KEYWORDS`** - 备注中的子类别关键词，当前 59 个输入关键词
-- **`NAME_KEYWORDS`** - 备注中的名称关键词，当前 15 个输入关键词
+- **`NAME_KEYWORDS`** - 备注中的名称关键词，当前 16 个输入关键词
 
 **餐饮规则边界：**
 - `DATA_SOURCE['MEAL']` 是餐别触发器，可包含固定餐饮地点、品牌、食堂和具体餐品词。
@@ -181,7 +189,7 @@ python Moze4.0报销_Enhanced.py             # 差旅报销生成
 
 自动餐别推导不靠备注写 `正餐`，而是命中 `DATA_SOURCE['MEAL']` 后按交易时间推导早餐/午餐/晚餐/夜宵。
 
-**NAME_KEYWORDS（15 个输入关键词 → 子类别 + 名称）：**
+**NAME_KEYWORDS（16 个输入关键词 → 子类别 + 名称）：**
 
 | 输入关键词 | 子类别   | 名称     |
 |------------|----------|----------|
@@ -192,6 +200,7 @@ python Moze4.0报销_Enhanced.py             # 差旅报销生成
 | 鸡蛋 | 食材 | 蛋及蛋制品 |
 | 节点 | 虚拟其他 | 节点 |
 | 厨房用品 | 日常用品 | 厨房用品 |
+| 季度结息 | 利息收入 | 季度结息 |
 
 ## 关键文件
 

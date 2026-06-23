@@ -130,7 +130,8 @@ NAME_KEYWORDS = {
     '大米': ('食材', '大米'),
     '鸡蛋': ('食材', '蛋及蛋制品'),
     '节点': ('虚拟其他', '节点'),
-    '厨房用品': ('日常用品', '厨房用品')
+    '厨房用品': ('日常用品', '厨房用品'),
+    "季度结息": ('利息收入', '季度结息')
 }
 
 LOCATION_TAG_KEYWORDS = {
@@ -821,7 +822,8 @@ def apply_compound_rules(df, compound_rules, output_cols):
             product_hit = (
                 bill_product.map(lambda text: bool(product_regex.search(text)))
                 if product_regex else
-                bill_product.str.contains(product_pattern, regex=False, na=False)
+                bill_product.str.contains(
+                    product_pattern, regex=False, na=False)
             )
             if merchant_pattern and merchant_pattern.lower() != 'nan':
                 merchant_hit = (
