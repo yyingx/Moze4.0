@@ -1532,8 +1532,7 @@ def finalize_records(df, main_col, sub_col):
     df[['币种', '手续费', '折扣']] = ["CNY", 0, 0]
 
     mask_debt = df['记录类型'].isin(DEBT_RECORD_TYPES)
-    mask_pure_debt = mask_debt & df[sub_col].ne('报账')
-    df.loc[mask_pure_debt, '商家'] = ""
+    df.loc[mask_debt, '商家'] = ""
     df.loc[mask_debt, '项目'] = ""
 
     return df
