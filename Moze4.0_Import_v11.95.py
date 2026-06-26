@@ -1366,6 +1366,9 @@ def process_main(df_in, df_rules, main_col, sub_col):
 
     df['记录类型'] = df.get('记录类型', pd.NA).replace("", pd.NA).fillna(df['收/支'])
     df['商家'] = df.get('商家', pd.NA).replace("", pd.NA).fillna(df['交易对方'])
+    _redundant_bracket = r'^(.+?)\s*\(\1\)$'
+    df['商家'] = df['商家'].astype(str).str.replace(
+        _redundant_bracket, r'\1', regex=True).str.strip()
     df = clean_auto_descriptions(df)
     df[sub_col] = normalize_text_series(df[sub_col])
 
@@ -1625,6 +1628,8 @@ def main():
 
         df_raw['交易对方'] = normalize_text_series(
             df_raw.get('交易对方', pd.Series('', index=df_raw.index)))
+        df_raw['交易对方'] = df_raw['交易对方'].str.replace(
+            r'^(.+?)\s*\(\1\)$', r'\1', regex=True)
 
         # 分流内部转账
         mask_trans = df_raw['交易对方'].isin(WECHAT_TRANSFER_TARGETS)
