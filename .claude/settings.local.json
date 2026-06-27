@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(python:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git diff *)",
+      "Bash(ls -la Moze4.0_Import_v12.00.py Moze4.0_Import_v12.01.py)"
     ]
   }
 }

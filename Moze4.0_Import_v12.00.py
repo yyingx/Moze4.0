@@ -80,6 +80,7 @@ def ensure_columns(df, main_col, sub_col):
 
 # 配置数据
 
+
 # 路径
 CURRENT_DIR = Path(__file__).parent if '__file__' in locals() else Path.cwd()
 RULE_BOOK_PATH = CURRENT_DIR / "Moze Dict.xlsx"
@@ -305,14 +306,14 @@ DATA_SOURCE = {
         # 风味/地域
         "兰州", "沙县", "长沙臭豆腐", "重庆小面",
         # 饭/面/粉/锅
-        "麻辣香锅", "麻辣烫", "鸡公煲", "猪脚饭", "卤肉饭", "盖浇饭", "炒饭", "炒面", "快餐", "小碗菜",
+        "麻辣香锅", "麻辣烫", "鸡公煲", "猪脚饭", "卤肉饭", "盖浇饭", "炒饭", "炒面", "小碗菜",
         "热干面", "板面", "油泼面", "牛肉面", "刀削面", "牛杂粉", "肠粉", "牛肉汤", "汤粉", "粉面", "凉面", "凉皮",
         # 面点/早餐/小吃
         "水煎包", "小笼包", "汽水包", "煎豆折", "鸡蛋饼", "包粑",
         "煎包", "煎饼", "烧饼", "锅盔", "肉夹馍", "馕",
         "水饺", "蒸饺", "混沌", "馄饨", "包子", "小面", "油条",
         # 通用场景/店名
-        "烧烤", "路边摊", "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆", "餐馆"
+        "烧烤", "路边摊", "食堂", "餐厅", "早点", "小吃", "餐饮", "面馆", "餐馆", "快餐"
     ]
 }
 
@@ -462,6 +463,7 @@ ALL_SPECIAL_PATTERN = re.compile(
 
 # 规则与输入加载
 
+
 def load_rules(rule_path: Path):
     """加载 Moze Dict 规则表。"""
     logger.info("正在加载规则...")
@@ -599,6 +601,7 @@ def load_bill_files(files):
 
 # 用户交互
 
+
 def get_user_input():
     """选择文件和起始日期。"""
     root = tk.Tk()
@@ -624,6 +627,7 @@ def get_user_input():
     return files, st_date
 
 # 原始流水规整
+
 
 def prepare_raw_transactions(df_in):
     """补齐原始交易列。"""
@@ -749,6 +753,7 @@ def fill_default_accounts_by_source(df):
     return df
 
 # 字典规则应用
+
 
 def _apply_single_rules(df, merchant_rules, product_rules, output_cols):
     """应用单条件规则，只补空字段。"""
@@ -929,6 +934,7 @@ def apply_pdd_inout_rule(df, main_col, sub_col):
 
 # 转账与备注
 
+
 def clear_overridden_classification_fields(df, mask):
     """清理被手动备注覆盖的分类字段。"""
     df.loc[mask, ['名称', '对象']] = ''
@@ -1030,6 +1036,7 @@ def get_wechat_transfer_income_mask(df):
     )
 
 # 手动备注解析
+
 
 def parse_memo_subcategory(df, main_col, sub_col):
     """解析备注子类别。"""
@@ -1200,6 +1207,7 @@ def process_generic_keywords(df, sub_col):
 
 # 自动分类
 
+
 def _apply_ingredient_patterns(df, sub_col, search_series, main_col,
                                mask_meal, mask_ingredients_exact):
     """匹配食材和商品类别。"""
@@ -1303,6 +1311,7 @@ def process_heuristics(df_in, main_col, sub_col):
     return df
 
 # 检查与保存
+
 
 def warn_refund_rows(df_raw):
     """提示退款记录。"""
@@ -1459,6 +1468,7 @@ def validate_final_data(df_final, main_col, sub_col):
         print(f"{BColors.OKGREEN}✅ 数据验证通过{BColors.ENDC}")
 
 # 主流程整合
+
 
 def finalize_records(df, main_col, sub_col):
     """整理金额、日期和账户。"""
