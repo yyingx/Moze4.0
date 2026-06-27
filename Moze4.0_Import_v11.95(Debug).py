@@ -1611,6 +1611,9 @@ def process_main(df_in, df_rules, main_col, sub_col, debugger=None):
 
     df['记录类型'] = df.get('记录类型', pd.NA).replace("", pd.NA).fillna(df['收/支'])
     df['商家'] = df.get('商家', pd.NA).replace("", pd.NA).fillna(df['交易对方'])
+    _redundant_bracket = r'^(.+?)\s*\(\1\)$'
+    df['商家'] = df['商家'].astype(str).str.replace(
+        _redundant_bracket, r'\1', regex=True).str.strip()
     df = clean_auto_descriptions(df)
     df[sub_col] = normalize_text_series(df[sub_col])
     if debugger:
