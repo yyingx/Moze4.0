@@ -5,6 +5,14 @@ __pycache__/
 *.csv
 *.xlsx
 /Moze4.0_Debug/
+/Vivo账单/
+# 财务相关文件忽略
+/源文件zip/
+/zip源文件/
+/源账单CSV&Xslx/
+/云闪付账单/
+/自动提取源账单(破解)/
+/自动提取源账单(手动)/
 # Runtime artifacts
 *.log
 _tmp_*_state.json
@@ -13,14 +21,6 @@ nba_finals_monitor_state.json
 /run_nba_finals_monitor.ps1
 /NBA/
 /IPTV/
-
-# Local bill screenshots
-/微信图片_20260118125126_71_8.jpg
-/微信图片_20260118135436_72_8.jpg
-/微信图片_20260202200511_86_8.jpg
-/微信图片_20260208002929_89_8.jpg
-/微信图片_20260312134948_62_34.jpg
-/微信图片_20260312140029_63_34.jpg
 
 # Local World Cup Telegram bot/report files
 /2026 World Cup/

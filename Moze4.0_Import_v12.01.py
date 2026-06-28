@@ -617,7 +617,8 @@ def get_user_input():
 
     logger.info("请选择账单文件...")
     files = filedialog.askopenfilenames(
-        parent=root, title="请选择账单文件", filetypes=[("Excel/CSV", "*.xlsx;*.csv")])
+        parent=root, title="请选择账单文件", filetypes=[("Excel/CSV", "*.xlsx;*.csv")],
+        initialdir=r"E:\天之逸2025\Moze4.0\源账单CSV&Xslx")
     root.attributes('-topmost', False)
     root.update()
 
@@ -1241,7 +1242,7 @@ def _infer_meal_time(df, sub_col, mask_meal):
     mask_time_meal = (df[sub_col] == "") & mask_meal
     if mask_time_meal.any():
         h = df.loc[mask_time_meal, '交易时间'].dt.hour
-        conditions = [(h >= 6) & (h < 11), (h >= 11) &
+        conditions = [(h >= 4) & (h < 11), (h >= 11) &
                       (h < 16), (h >= 16) & (h < 21)]
         choices = ["早餐", "午餐", "晚餐"]
         df.loc[mask_time_meal, sub_col] = np.select(
